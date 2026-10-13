@@ -110,12 +110,54 @@ export default {
           '50%': { transform: 'translate(18px, -14px) rotate(4deg)' },
           '100%': { transform: 'translate(0, 0) rotate(-4deg)' },
         },
+        // Temporada: chispas que suben como de una vela
+        'ember-rise': {
+          '0%': { transform: 'translate(0, 0) scale(1)', opacity: '0' },
+          '12%': { opacity: '1' },
+          '70%': { opacity: '.7' },
+          '100%': { transform: 'translate(var(--ember-dx, 20px), -85vh) scale(.4)', opacity: '0' },
+        },
+        // Pétalos de cempasúchil que caen girando
+        'petal-fall': {
+          '0%': { transform: 'translate(0, -10vh) rotate(0deg)', opacity: '0' },
+          '10%': { opacity: '1' },
+          '90%': { opacity: '1' },
+          '100%': { transform: 'translate(var(--petal-dx, 60px), 110vh) rotate(540deg)', opacity: '0' },
+        },
+        // Banderines de papel picado meciéndose con el aire
+        'papel-sway': {
+          '0%, 100%': { transform: 'rotate(-5deg)' },
+          '50%': { transform: 'rotate(5deg)' },
+        },
+        // La araña sube y baja por su hilo
+        'spider-bob': {
+          '0%, 100%': { transform: 'translateY(-38%)' },
+          '50%': { transform: 'translateY(0)' },
+        },
+        // Bruma que se desplaza a ras de suelo
+        'fog-drift': {
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-50%)' },
+        },
+        // Parpadeo de llama
+        flicker: {
+          '0%, 100%': { opacity: '.85', transform: 'scale(1)' },
+          '30%': { opacity: '1', transform: 'scale(1.06)' },
+          '55%': { opacity: '.7', transform: 'scale(.97)' },
+          '80%': { opacity: '.95', transform: 'scale(1.03)' },
+        },
       },
       animation: {
         'stamp-in': 'stamp-in .55s cubic-bezier(.22,1.2,.36,1) both',
         shimmer: 'shimmer 2.4s linear infinite',
         'float-slow': 'float-slow 7s ease-in-out infinite',
         'bat-drift': 'bat-drift 9s ease-in-out infinite',
+        'ember-rise': 'ember-rise 9s ease-out infinite',
+        'petal-fall': 'petal-fall 16s linear infinite',
+        'papel-sway': 'papel-sway 3.6s ease-in-out infinite',
+        'spider-bob': 'spider-bob 7s ease-in-out infinite',
+        'fog-drift': 'fog-drift 60s linear infinite',
+        flicker: 'flicker 2.8s ease-in-out infinite',
       },
     },
   },

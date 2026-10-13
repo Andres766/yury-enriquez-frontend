@@ -1,6 +1,8 @@
 import { motion, useReducedMotion } from 'framer-motion';
 import { Button } from '../ui/index.jsx';
 import { useSettings } from '../../context/SettingsContext.jsx';
+import PapelPicadoGarland from '../seasonal/PapelPicadoGarland.jsx';
+import { Cobweb, HangingSpider } from '../seasonal/HalloweenIcons.jsx';
 
 /**
  * Portada.
@@ -9,10 +11,15 @@ import { useSettings } from '../../context/SettingsContext.jsx';
  * a partir de `lg` pasa a dos columnas con la imagen desbordando hacia
  * el margen derecho. El texto nunca se superpone a la foto en pantallas
  * pequeñas, que es donde ese recurso suele romper la legibilidad.
+ *
+ * En temporada de Halloween se viste: guirnalda de papel picado sobre
+ * el contenido, la foto a luz de vela, una telaraña en su esquina y
+ * una araña que sube y baja por su hilo. El texto no cambia de sitio.
  */
 export default function Hero() {
   const settings = useSettings();
   const reduced = useReducedMotion();
+  const halloween = settings.theme === 'HALLOWEEN';
 
   const fadeUp = (delay = 0) => ({
     initial: reduced ? false : { opacity: 0, y: 26 },
@@ -28,10 +35,20 @@ export default function Hero() {
         <div className="absolute -left-32 top-1/3 h-72 w-72 rounded-full bg-gold-100/70 blur-3xl" />
       </div>
 
-      <div className="container-page relative grid items-center gap-12 py-16 sm:py-20 lg:grid-cols-[1.05fr_1fr] lg:gap-16 lg:py-28">
+      {halloween && (
+        <div className="container-page absolute inset-x-0 top-0 z-10">
+          <PapelPicadoGarland />
+        </div>
+      )}
+
+      <div
+        className={`container-page relative grid items-center gap-12 py-16 sm:py-20 lg:grid-cols-[1.05fr_1fr] lg:gap-16 lg:py-28 ${
+          halloween ? 'pt-24 sm:pt-28 lg:pt-32' : ''
+        }`}
+      >
         <div className="text-center lg:text-left">
           <motion.p {...fadeUp(0)} className="eyebrow">
-            Maquillaje · Peinado · Cita previa
+            {halloween ? 'Temporada de Catrinas · Maquillaje · Peinado' : 'Maquillaje · Peinado · Cita previa'}
           </motion.p>
 
           <motion.h1
@@ -124,7 +141,35 @@ export default function Hero() {
               decoding="async"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-scrim/25 via-transparent to-transparent" aria-hidden="true" />
+
+            {halloween && (
+              <>
+                {/* Foto a luz de vela: cálido desde abajo, noche morada arriba */}
+                <div
+                  aria-hidden="true"
+                  className="absolute inset-0 mix-blend-soft-light"
+                  style={{
+                    backgroundImage:
+                      'linear-gradient(to top, rgb(240 146 62 / 0.75), transparent 55%), linear-gradient(to bottom, rgb(74 32 96 / 0.85), transparent 60%)',
+                  }}
+                />
+                <div aria-hidden="true" className="absolute inset-0 shadow-[inset_0_0_80px_20px_rgb(22_17_27/0.65)]" />
+                <Cobweb
+                  className="pointer-events-none absolute -left-2 -top-2 h-28 w-28 text-white/45 sm:h-36 sm:w-36"
+                  strokeWidth={0.9}
+                />
+              </>
+            )}
           </div>
+
+          {halloween && (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -top-2 left-[30%] z-10 h-40 overflow-hidden sm:h-48"
+            >
+              <HangingSpider className="h-40 w-auto animate-spider-bob text-ink-800/80 sm:h-48" />
+            </div>
+          )}
 
           {/* Tarjeta flotante decorativa */}
           <motion.div

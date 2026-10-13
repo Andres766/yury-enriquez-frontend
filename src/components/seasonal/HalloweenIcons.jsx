@@ -220,3 +220,60 @@ export function Candle({ className, strokeWidth = 1.4 }) {
     </svg>
   );
 }
+
+/**
+ * Banderín de papel picado, con los calados recortados del propio
+ * papel (`evenodd`): se ve el fondo a través, como en el de verdad.
+ * Es la única pieza rellena del set, porque el papel picado es color.
+ */
+export function PapelPicado({ className }) {
+  return (
+    <svg viewBox="0 0 28 36" className={className} aria-hidden="true">
+      <path
+        fill="currentColor"
+        fillRule="evenodd"
+        d={[
+          // Papel, con el borde inferior en picos
+          'M0 0H28V29L24.5 35L21 29L17.5 35L14 29L10.5 35L7 29L3.5 35L0 29Z',
+          // Flor central
+          'M10 14a4 4 0 1 0 8 0a4 4 0 1 0-8 0Z',
+          'M12.8 7.2a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0-2.4 0Z',
+          'M12.8 20.8a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0-2.4 0Z',
+          'M6.2 14a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0-2.4 0Z',
+          'M19.4 14a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0-2.4 0Z',
+          // Rombos de esquina
+          'M5 3.4L7 5.4L5 7.4L3 5.4Z',
+          'M23 3.4L25 5.4L23 7.4L21 5.4Z',
+          'M5 20.6L7 22.6L5 24.6L3 22.6Z',
+          'M23 20.6L25 22.6L23 24.6L21 22.6Z',
+        ].join('')}
+      />
+    </svg>
+  );
+}
+
+/** Flor de cempasúchil vista desde arriba: la flor del Día de Muertos. */
+export function Marigold({ className, style }) {
+  return (
+    <svg viewBox="0 0 32 32" className={className} style={style} aria-hidden="true">
+      <g fill="currentColor">
+        {Array.from({ length: 10 }, (_, i) => (
+          <ellipse key={i} cx="16" cy="7.5" rx="3.6" ry="6.5" transform={`rotate(${i * 36} 16 16)`} opacity=".85" />
+        ))}
+      </g>
+      <circle cx="16" cy="16" r="4.2" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** Araña colgando de su hilo; el hilo sale del borde superior del SVG. */
+export function HangingSpider({ className, strokeWidth = 1.3 }) {
+  return (
+    <svg viewBox="0 0 32 120" className={className} {...base} strokeWidth={strokeWidth}>
+      <path d="M16 0v92" strokeWidth={strokeWidth * 0.6} opacity=".7" />
+      <ellipse cx="16" cy="97" rx="4.2" ry="5" fill="currentColor" />
+      <circle cx="16" cy="104.5" r="3" fill="currentColor" />
+      <path d="M12.4 94.5l-6-4.5-2 4M12 97.5H4.5l-2.5 4M12.4 100.5l-5.4 4.5 0 5M19.6 94.5l6-4.5 2 4M20 97.5h7.5l2.5 4M19.6 100.5l5.4 4.5 0 5" />
+    </svg>
+  );
+}
