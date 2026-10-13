@@ -1,0 +1,176 @@
+@import './styles/themes.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /*
+   * Accesibilidad: quien haya pedido menos movimiento en su sistema
+   * operativo no debería recibir animaciones. Framer Motion respeta
+   * esta preferencia mediante useReducedMotion, y aquí se neutraliza
+   * también todo lo que viene de CSS.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  body {
+    @apply bg-cream font-sans text-ink-700 antialiased;
+    text-rendering: optimizeLegibility;
+    /* Transición suave al cambiar de tema desde el panel. */
+    transition:
+      background-color 0.4s ease,
+      color 0.4s ease;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display text-ink-800;
+    font-weight: 400;
+  }
+
+  /*
+   * Foco visible y coherente en toda la web. Nunca se elimina el
+   * outline sin poner otro indicador: la navegación por teclado
+   * depende de él.
+   */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-600 ring-offset-2 ring-offset-cream;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    @apply bg-brand-200 text-ink-900;
+  }
+
+  /* Barra de desplazamiento discreta, acorde al tema activo. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--c-brand-300)) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-brand-300;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    @apply bg-brand-400;
+  }
+}
+
+@layer components {
+  /* Enlace "saltar al contenido" para lectores de pantalla y teclado. */
+  .skip-link {
+    @apply absolute left-4 top-4 z-[100] -translate-y-24 rounded-full bg-ink-800 px-5 py-3 text-sm font-medium text-on-ink transition-transform focus:translate-y-0;
+  }
+
+  .container-page {
+    @apply mx-auto w-full max-w-6xl px-5 sm:px-6 lg:px-8;
+  }
+
+  .eyebrow {
+    @apply text-[11px] font-medium uppercase tracking-widest text-brand-700 sm:text-xs;
+  }
+
+  /* Filete decorativo bajo los títulos de sección. */
+  .rule-ornament::after {
+    content: '';
+    @apply mx-auto mt-5 block h-px w-16 bg-gradient-to-r from-transparent via-brand-400 to-transparent;
+  }
+
+  /*
+   * En temporada el filete se convierte en una calaverita entre dos
+   * trazos. Se hace en CSS y no en JSX porque afecta a todos los
+   * títulos de sección del sitio a la vez: un solo bloque aquí evita
+   * tocar una docena de componentes.
+   *
+   * La calavera va como SVG en `mask-image` en vez de `background`,
+   * para que tome el color de `brand-400` del tema y no quede un dibujo
+   * de color fijo.
+   */
+  [data-theme='halloween'] .rule-ornament::after {
+    @apply mt-5 h-4 w-24 bg-brand-400 bg-none;
+    -webkit-mask-image: var(--ornament-skull);
+    mask-image: var(--ornament-skull);
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+  }
+
+  .card-surface {
+    @apply rounded-3xl border border-line bg-surface shadow-soft;
+  }
+
+  .input-base {
+    @apply w-full rounded-xl border border-line bg-surface px-4 py-3 text-ink-800 shadow-inset transition
+           placeholder:text-ink-400 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-300;
+  }
+
+  .label-base {
+    @apply mb-1.5 block text-sm font-medium text-ink-700;
+  }
+
+  .hint-text {
+    @apply mt-1.5 text-xs leading-relaxed text-ink-500;
+  }
+
+  .error-text {
+    @apply mt-1.5 flex items-start gap-1.5 text-xs font-medium text-red-700;
+  }
+
+  /* Textura suave de fondo para las secciones destacadas. */
+  .veil {
+    background-image:
+      radial-gradient(60% 60% at 15% 10%, var(--veil-1) 0%, transparent 60%),
+      radial-gradient(50% 50% at 90% 20%, var(--veil-2) 0%, transparent 62%);
+  }
+
+  /*
+   * El filete doble del logo: gris con destellos rosados en las
+   * esquinas. Se usa como marco decorativo en la portada.
+   */
+  .logo-frame {
+    background-image: linear-gradient(
+      100deg,
+      rgb(var(--c-rose)) 0%,
+      rgb(var(--c-frame)) 22%,
+      rgb(var(--c-frame)) 78%,
+      rgb(var(--c-rose)) 100%
+    );
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
+  }
+  /* Oculta visualmente pero lo mantiene para lectores de pantalla. */
+  .sr-only-focusable:not(:focus):not(:focus-within) {
+    @apply sr-only;
+  }
+}
