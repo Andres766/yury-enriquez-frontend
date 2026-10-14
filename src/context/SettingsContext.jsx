@@ -30,6 +30,8 @@ const FALLBACK = {
   maxAdvanceDays: 90,
   slotIntervalMinutes: 30,
   bufferMinutes: 15,
+  /** true cuando ya respondió GET /api/settings (o falló). */
+  loaded: false,
 };
 
 /** El enum del backend en mayúsculas → el atributo CSS en minúsculas. */
@@ -72,10 +74,12 @@ export function SettingsProvider({ children }) {
     api
       .get('/settings')
       .then((data) => {
-        if (!cancelled && data?.settings) setSettings({ ...FALLBACK, ...data.settings });
+        if (!cancelled && data?.settings) setSettings({ ...FALLBACK, ...data.settings, loaded: true });
       })
       .catch(() => {
-        // Se mantienen los valores por defecto.
+        // Se mantienen los valores por defecto, pero se marca como
+        // cargado para que la pantalla de entrada no espere en vano.
+        if (!cancelled) setSettings((prev) => ({ ...prev, loaded: true }));
       });
     return () => {
       cancelled = true;

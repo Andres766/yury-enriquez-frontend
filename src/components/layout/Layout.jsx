@@ -5,6 +5,7 @@ import Footer from './Footer.jsx';
 import WhatsAppButton from './WhatsAppButton.jsx';
 import SeasonalDecor from './SeasonalDecor.jsx';
 import SeasonalBanner from './SeasonalBanner.jsx';
+import IntroLoader from './IntroLoader.jsx';
 
 /**
  * Estructura pública del sitio.
@@ -22,6 +23,7 @@ export default function Layout() {
 
   return (
     <div className="relative flex min-h-screen flex-col">
+      <IntroLoader />
       <SeasonalDecor />
 
       <a href="#contenido" className="skip-link">
