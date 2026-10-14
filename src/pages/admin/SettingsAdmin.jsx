@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../../lib/api.js';
 import { useToast } from '../../context/ToastContext.jsx';
-import { Button, Input, Textarea, LoadingBlock, Alert } from '../../components/ui/index.jsx';
+import { Button, Input, Textarea, Select, LoadingBlock, Alert } from '../../components/ui/index.jsx';
 import ThemePicker from '../../components/admin/ThemePicker.jsx';
 import { applyTheme } from '../../context/SettingsContext.jsx';
 
@@ -81,6 +81,52 @@ const GROUPS = [
   },
 ];
 
+const THEME_NAMES = { LIGHT: 'Claro', DARK: 'Oscuro', HALLOWEEN: 'Halloween' };
+
+/** Hoy como YYYY-MM-DD en la zona horaria del negocio. */
+function todayIn(timeZone) {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+/** "2026-10-24" → "sábado 24 de octubre". Se lee a mediodía para no cruzar de día. */
+function longDate(iso) {
+  return new Intl.DateTimeFormat('es-CO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(
+    new Date(`${iso}T12:00:00Z`),
+  );
+}
+
+/**
+ * Estado de la programación con lo que hay escrito en el formulario,
+ * para avisar en vivo antes de guardar. El servidor aplica la misma
+ * regla (fechas inclusive, zona del negocio) al servir la web.
+ */
+function seasonalSummary(form) {
+  const { seasonalTheme: theme, seasonalStartDate: start, seasonalEndDate: end } = form;
+  if (!theme && !start && !end) return null;
+  if (!theme || !start || !end) return { tone: 'warning', text: 'Completa el tema y las dos fechas para que quede programado.' };
+  if (start > end) return { tone: 'warning', text: 'La fecha de fin es anterior a la de inicio.' };
+
+  const name = THEME_NAMES[theme];
+  const today = todayIn(form.timezone || 'America/Bogota');
+  if (today < start) {
+    return {
+      tone: 'info',
+      text: `${name} se activará solo el ${longDate(start)} y se quitará al terminar el ${longDate(end)}. Hasta entonces la web usa el tema ${THEME_NAMES[form.theme].toLowerCase()}.`,
+    };
+  }
+  if (today <= end) {
+    return {
+      tone: 'success',
+      text: `${name} está activo ahora en la web. Vuelve solo al tema ${THEME_NAMES[form.theme].toLowerCase()} al terminar el ${longDate(end)}.`,
+    };
+  }
+  return { tone: 'warning', text: `La temporada terminó el ${longDate(end)}. Cambia las fechas para programar la siguiente.` };
+}
+
 export default function SettingsAdmin() {
   const toast = useToast();
   const [form, setForm] = useState(null);
@@ -108,8 +154,14 @@ export default function SettingsAdmin() {
     api
       .get('/settings/admin')
       .then((d) => {
-        setForm({ ...d.settings });
-        savedTheme.current = d.settings.theme;
+        setForm({
+          ...d.settings,
+          seasonalTheme: d.settings.seasonalTheme ?? '',
+          seasonalStartDate: d.settings.seasonalStartDate ?? '',
+          seasonalEndDate: d.settings.seasonalEndDate ?? '',
+        });
+        // Lo que ve la web hoy (puede ser el de temporada), no el base
+        savedTheme.current = d.settings.effectiveTheme ?? d.settings.theme;
       })
       .catch((error) => toast.error(error.message));
   }, [toast]);
@@ -126,7 +178,7 @@ export default function SettingsAdmin() {
 
     // Solo se envían los campos editables: id y updatedAt los gestiona
     // la base de datos.
-    const { id, updatedAt, ...payload } = form;
+    const { id, updatedAt, effectiveTheme, seasonalActive, seasonalUpcoming, ...payload } = form;
     for (const key of ['slotIntervalMinutes', 'bufferMinutes', 'minNoticeHours', 'maxAdvanceDays', 'stampsRequired']) {
       payload[key] = Number(payload[key]);
     }
@@ -136,9 +188,14 @@ export default function SettingsAdmin() {
 
     try {
       const { settings } = await api.patch('/settings/admin', payload);
-      setForm(settings);
-      savedTheme.current = settings.theme;
-      applyTheme(settings.theme);
+      setForm({
+        ...settings,
+        seasonalTheme: settings.seasonalTheme ?? '',
+        seasonalStartDate: settings.seasonalStartDate ?? '',
+        seasonalEndDate: settings.seasonalEndDate ?? '',
+      });
+      savedTheme.current = settings.effectiveTheme ?? settings.theme;
+      applyTheme(savedTheme.current);
       toast.success('Ajustes guardados. La web se actualiza en unos segundos.');
     } catch (error) {
       if (error instanceof ApiError && error.details?.length) {
@@ -185,6 +242,66 @@ export default function SettingsAdmin() {
               applyTheme(theme);
             }}
           />
+
+          {/* ── Programación de temporada ── */}
+          <div className="mt-6 border-t border-line pt-5">
+            <h3 className="font-medium text-ink-800">Programar un tema de temporada</h3>
+            <p className="mt-1 text-xs leading-relaxed text-ink-500">
+              Entre estas dos fechas (ambas incluidas) la web muestra el tema de temporada en lugar del
+              de arriba. Empieza a medianoche del primer día y se quita sola al terminar el último: no
+              tienes que acordarte de cambiarlo.
+            </p>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <Select
+                label="Tema de temporada"
+                value={form.seasonalTheme}
+                onChange={set('seasonalTheme')}
+                error={errors.seasonalTheme}
+              >
+                <option value="">Sin programar</option>
+                <option value="HALLOWEEN">Halloween</option>
+                <option value="DARK">Oscuro</option>
+              </Select>
+              <Input
+                label="Desde"
+                type="date"
+                value={form.seasonalStartDate}
+                onChange={set('seasonalStartDate')}
+                error={errors.seasonalStartDate}
+              />
+              <Input
+                label="Hasta"
+                type="date"
+                min={form.seasonalStartDate || undefined}
+                value={form.seasonalEndDate}
+                onChange={set('seasonalEndDate')}
+                error={errors.seasonalEndDate}
+              />
+            </div>
+
+            {(() => {
+              const summary = seasonalSummary(form);
+              if (!summary) return null;
+              return (
+                <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
+                  <Alert tone={summary.tone} className="flex-1">
+                    {summary.text}
+                  </Alert>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      setForm((f) => ({ ...f, seasonalTheme: '', seasonalStartDate: '', seasonalEndDate: '' }))
+                    }
+                  >
+                    Quitar programación
+                  </Button>
+                </div>
+              );
+            })()}
+          </div>
         </fieldset>
 
         {GROUPS.map((group) => (

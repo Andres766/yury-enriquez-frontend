@@ -2,7 +2,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { Button } from '../ui/index.jsx';
 import { useSettings } from '../../context/SettingsContext.jsx';
 import PapelPicadoGarland from '../seasonal/PapelPicadoGarland.jsx';
-import { Cobweb, HangingSpider } from '../seasonal/HalloweenIcons.jsx';
+import { Cobweb } from '../seasonal/HalloweenIcons.jsx';
 
 /**
  * Portada.
@@ -13,8 +13,9 @@ import { Cobweb, HangingSpider } from '../seasonal/HalloweenIcons.jsx';
  * pequeñas, que es donde ese recurso suele romper la legibilidad.
  *
  * En temporada de Halloween se viste: guirnalda de papel picado sobre
- * el contenido, la foto a luz de vela, una telaraña en su esquina y
- * una araña que sube y baja por su hilo. El texto no cambia de sitio.
+ * el contenido, la foto a luz de vela y una telaraña en su esquina.
+ * Sin araña sobre la foto: con una foto real caía sobre la cara de
+ * Yury. El texto no cambia de sitio.
  */
 export default function Hero() {
   const settings = useSettings();
@@ -133,13 +134,26 @@ export default function Hero() {
           className="relative mx-auto w-full max-w-md lg:max-w-none"
         >
           <div className="relative aspect-[4/5] overflow-hidden rounded-[2.5rem] border border-line bg-blush shadow-lift">
-            <img
-              src="https://picsum.photos/seed/estudio-hero/900/1125"
-              alt="Maquilladora profesional aplicando maquillaje a una clienta en el estudio"
-              className="h-full w-full object-cover"
-              fetchpriority="high"
-              decoding="async"
-            />
+            {/* Foto real del estudio. WebP para quien lo soporte, JPG de
+                respaldo; dos anchos para no bajar 1084 px en un celular. */}
+            <picture>
+              <source
+                type="image/webp"
+                srcSet="/img/hero-yury-640.webp 640w, /img/hero-yury-1084.webp 1084w"
+                sizes="(min-width: 1024px) 45vw, 90vw"
+              />
+              <img
+                src="/img/hero-yury-1084.jpg"
+                srcSet="/img/hero-yury-640.jpg 640w, /img/hero-yury-1084.jpg 1084w"
+                sizes="(min-width: 1024px) 45vw, 90vw"
+                width="1084"
+                height="1451"
+                alt="Yury Enríquez maquillando a una clienta en su estudio, frente al aro de luz"
+                className="h-full w-full object-cover object-[50%_35%]"
+                fetchpriority="high"
+                decoding="async"
+              />
+            </picture>
             <div className="absolute inset-0 bg-gradient-to-t from-scrim/25 via-transparent to-transparent" aria-hidden="true" />
 
             {halloween && (
@@ -150,7 +164,7 @@ export default function Hero() {
                   className="absolute inset-0 mix-blend-soft-light"
                   style={{
                     backgroundImage:
-                      'linear-gradient(to top, rgb(240 146 62 / 0.75), transparent 55%), linear-gradient(to bottom, rgb(74 32 96 / 0.85), transparent 60%)',
+                      'linear-gradient(to top, rgb(240 146 62 / 0.35), transparent 45%), linear-gradient(to bottom, rgb(74 32 96 / 0.4), transparent 40%)',
                   }}
                 />
                 <div aria-hidden="true" className="absolute inset-0 shadow-[inset_0_0_80px_20px_rgb(22_17_27/0.65)]" />
@@ -162,14 +176,6 @@ export default function Hero() {
             )}
           </div>
 
-          {halloween && (
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute -top-2 left-[30%] z-10 h-40 overflow-hidden sm:h-48"
-            >
-              <HangingSpider className="h-40 w-auto animate-spider-bob text-ink-800/80 sm:h-48" />
-            </div>
-          )}
 
           {/* Tarjeta flotante decorativa */}
           <motion.div
