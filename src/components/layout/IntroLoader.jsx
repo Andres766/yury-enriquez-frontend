@@ -14,6 +14,12 @@ import { Wordmark } from './Logo.jsx';
  * manuscrita del logo mientras llega la fuente y el del tema, que se
  * conoce cuando responde GET /api/settings.
  *
+ * El tema lo elige la administradora y en la primera visita el
+ * navegador aún no lo tiene guardado. Por eso el logo y la línea no se
+ * dibujan hasta conocerlo (o hasta THEME_WAIT): mientras tanto solo hay
+ * fondo liso, y el cambio de color, si lo hay, ocurre sin nada encima
+ * y se lee como carga, no como un cambio de tema a la vista.
+ *
  * Reglas para que no estorbe a quien viene a reservar:
  *   · Una sola vez por sesión del navegador (sessionStorage).
  *   · Nunca dura más de MAX_WAIT aunque la API tarde.
@@ -23,8 +29,9 @@ import { Wordmark } from './Logo.jsx';
  */
 
 const SEEN_KEY = 'intro-visto';
-const MIN_SHOW = 1100; // ms: lo justo para que el gesto se lea
-const MAX_WAIT = 2600; // ms: tope aunque la API o la fuente tarden
+const THEME_WAIT = 1000; // ms: si el tema no llega, se sigue con el que haya
+const MIN_SHOW = 1100; // ms desde que aparece el logo: lo justo para que el gesto se lea
+const MAX_WAIT = 3000; // ms: tope total aunque la API o la fuente tarden
 const EASE = [0.76, 0, 0.24, 1];
 
 function alreadySeen() {
@@ -51,12 +58,16 @@ export default function IntroLoader() {
   const [fontsReady, setFontsReady] = useState(false);
   const [minElapsed, setMinElapsed] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
+  const [themeTimedOut, setThemeTimedOut] = useState(false);
+
+  // El tema se da por conocido cuando respondió la API o pasó THEME_WAIT
+  const themeKnown = settings.loaded || themeTimedOut;
 
   useEffect(() => {
     if (!visible) return undefined;
 
     document.fonts?.ready.then(() => setFontsReady(true)) ?? setFontsReady(true);
-    const min = setTimeout(() => setMinElapsed(true), MIN_SHOW);
+    const theme = setTimeout(() => setThemeTimedOut(true), THEME_WAIT);
     const max = setTimeout(() => setTimedOut(true), MAX_WAIT);
 
     // Sin scroll mientras está el telón
@@ -64,13 +75,20 @@ export default function IntroLoader() {
     document.body.style.overflow = 'hidden';
 
     return () => {
-      clearTimeout(min);
+      clearTimeout(theme);
       clearTimeout(max);
       document.body.style.overflow = prev;
     };
   }, [visible]);
 
-  const ready = timedOut || (minElapsed && fontsReady && settings.loaded);
+  // El tiempo mínimo cuenta desde que el logo aparece, no desde la carga
+  useEffect(() => {
+    if (!visible || !themeKnown) return undefined;
+    const min = setTimeout(() => setMinElapsed(true), MIN_SHOW);
+    return () => clearTimeout(min);
+  }, [visible, themeKnown]);
+
+  const ready = timedOut || (themeKnown && minElapsed && fontsReady);
 
   useEffect(() => {
     if (!visible || !ready) return undefined;
@@ -84,7 +102,7 @@ export default function IntroLoader() {
 
   // Avance de la línea: arranca solo, se detiene en ~70 % mientras
   // espera y llega al 100 % cuando todo está listo.
-  const progress = ready ? 1 : fontsReady && settings.loaded ? 0.85 : 0.7;
+  const progress = ready ? 1 : fontsReady ? 0.85 : 0.7;
 
   return (
     <AnimatePresence>
@@ -97,36 +115,62 @@ export default function IntroLoader() {
         >
           {/* Telón: dos mitades que se abren hacia arriba y hacia abajo */}
           <motion.div
-            className="absolute inset-x-0 top-0 h-1/2 bg-cream transition-colors duration-500"
-            exit={{ y: '-100%', transition: { duration: 0.85, ease: EASE, delay: 0.05 } }}
+            className="absolute inset-x-0 top-0 h-1/2 bg-cream"
+            exit={{
+              y: '-100%',
+              transition: { duration: 0.85, ease: EASE, delay: 0.05 },
+            }}
           />
           <motion.div
-            className="absolute inset-x-0 bottom-0 h-1/2 bg-cream transition-colors duration-500"
-            exit={{ y: '100%', transition: { duration: 0.85, ease: EASE, delay: 0.05 } }}
+            className="absolute inset-x-0 bottom-0 h-1/2 bg-cream"
+            exit={{
+              y: '100%',
+              transition: { duration: 0.85, ease: EASE, delay: 0.05 },
+            }}
           />
 
-          {/* Línea que baja desde el borde hasta el logo */}
-          <div className="absolute left-1/2 top-0 h-[calc(50%-4.5rem)] w-px -translate-x-1/2 overflow-hidden">
-            <motion.div
-              className="h-full w-full origin-top bg-ink-800 transition-colors duration-500"
-              initial={{ scaleY: 0 }}
-              animate={{ scaleY: progress }}
-              exit={{ y: '-100%', transition: { duration: 0.6, ease: EASE } }}
-              transition={{ duration: ready ? 0.35 : 1.4, ease: [0.22, 0.61, 0.36, 1] }}
-            />
-          </div>
+          {/* Línea y logo: solo cuando ya se conoce el tema */}
+          {themeKnown && (
+            <>
+              {/* Línea que baja desde el borde hasta el logo */}
+              <div className="absolute left-1/2 top-0 h-[calc(50%-4.5rem)] w-px -translate-x-1/2 overflow-hidden">
+                <motion.div
+                  className="h-full w-full origin-top bg-ink-800"
+                  initial={{ scaleY: 0 }}
+                  animate={{ scaleY: progress }}
+                  exit={{
+                    y: '-100%',
+                    transition: { duration: 0.6, ease: EASE },
+                  }}
+                  transition={{
+                    duration: ready ? 0.35 : 1.4,
+                    ease: [0.22, 0.61, 0.36, 1],
+                  }}
+                />
+              </div>
 
-          {/* Logo */}
-          <motion.div
-            className="absolute inset-0 flex items-center justify-center"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } }}
-            exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.35, ease: 'easeIn' } }}
-          >
-            <div className="origin-center scale-[1.35] sm:scale-150">
-              <Wordmark brandName={settings.brandName} tagline={settings.tagline} />
-            </div>
-          </motion.div>
+              {/* Logo */}
+              <motion.div
+                className="absolute inset-0 flex items-center justify-center"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{
+                  opacity: 1,
+                  y: 0,
+                  transition: { duration: 0.6, ease: 'easeOut' },
+                }}
+                exit={{
+                  opacity: 0,
+                  scale: 0.96,
+                  transition: { duration: 0.35, ease: 'easeIn' },
+                }}
+              >
+                {/* Sin transiciones dentro: el logo debe estrenar ya los colores del tema */}
+                <div className="origin-center scale-[1.35] sm:scale-150 [&_*]:!transition-none">
+                  <Wordmark brandName={settings.brandName} tagline={settings.tagline} />
+                </div>
+              </motion.div>
+            </>
+          )}
         </motion.div>
       )}
     </AnimatePresence>
