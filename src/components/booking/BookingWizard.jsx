@@ -5,7 +5,17 @@ import { api, qs, ApiError } from '../../lib/api.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useSettings } from '../../context/SettingsContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
-import { duration, longDate, time, CATEGORY_LABEL, PAYMENT_LABEL, priceLabel } from '../../lib/format.js';
+import {
+  duration,
+  longDate,
+  time,
+  toDateISO,
+  CATEGORY_LABEL,
+  PAYMENT_LABEL,
+  priceLabel,
+  seasonText,
+  depositText,
+} from '../../lib/format.js';
 import { Button, Input, Textarea, Badge, Alert, Spinner, LoadingBlock, cx } from '../ui/index.jsx';
 import Calendar from './Calendar.jsx';
 import Stepper from './Stepper.jsx';
@@ -26,6 +36,20 @@ import {
   clearDraft,
   googleCalendarUrl,
   icsDataUrl,
+  serviceSeason,
+  inSeason,
+  seasonOver,
+  depositInfo,
+  isCouplesService,
+  isEarlyMorningCase,
+  addressError,
+  addressReady,
+  homeVisitHint,
+  addressLabel,
+  chargesHomeVisit,
+  homeVisitShort,
+  homeVisitFee,
+  ADDRESS_MAX,
 } from './bookingHelpers.js';
 
 /**
@@ -37,8 +61,8 @@ import {
  * cuenta se ofrece solo al final, con los datos ya puestos.
  *
  * La reserva es híbrida: lo sencillo se agenda en el calendario y lo
- * que necesita conversación (novias, servicios "a cotizar", grupos,
- * domicilio) se lleva a WhatsApp con el mensaje ya escrito. En cada
+ * que necesita conversación (novias y novios, servicios "a cotizar",
+ * grupos, madrugadas) se lleva a WhatsApp con el mensaje ya escrito. En cada
  * punto donde la clienta podría quedarse sin salida (servidor dormido,
  * día lleno, fecha fuera de la agenda abierta) hay un botón de WhatsApp.
  *
@@ -46,6 +70,16 @@ import {
  * en el paso de fecha y hora, y al volver a la pestaña. Aun así, la
  * palabra final la tiene el servidor: si alguien se adelanta, la API
  * responde 409 y aquí se refresca la lista y se avisa.
+ *
+ * Abono: si en Ajustes hay porcentaje de abono (`depositPercent`), cada
+ * texto que habla de pagar o de separar la fecha lo dice con
+ * `depositText`; si está vacío, se mantiene el texto neutro de siempre.
+ *
+ * Domicilio: Yury no tiene estudio, todo el servicio es a domicilio. Por
+ * eso la dirección (`serviceAddress`) es obligatoria en "Tus datos" y en
+ * ningún texto se dice "te esperamos en…": es ella la que llega. El
+ * adicional del domicilio (`homeVisitFeeCents` de Ajustes) se muestra
+ * junto al precio, pero no se suma al precio guardado de la reserva.
  */
 
 const STEPS = [
@@ -59,6 +93,7 @@ const EMPTY_FORM = {
   customerName: '',
   customerEmail: '',
   customerPhone: '',
+  serviceAddress: '',
   notes: '',
   paymentMethod: 'TRANSFERENCIA',
   website: '', // trampa para bots, oculta visualmente
@@ -154,8 +189,12 @@ export default function BookingWizard() {
         setCatalog((c) => ({ ...c, status: 'error' }));
         return;
       }
+      // Un servicio de temporada cuya temporada ya pasó no se ofrece: su
+      // calendario saldría entero cerrado. Si llega por enlace, se avisa
+      // como cualquier servicio no disponible.
+      const today = toDateISO(new Date(), settings.timezone);
       setCatalog({
-        services: s.value.services ?? [],
+        services: (s.value.services ?? []).filter((item) => !seasonOver(item, today)),
         occasions: o.status === 'fulfilled' ? o.value.occasions ?? [] : [],
         status: 'ready',
       });
@@ -184,12 +223,13 @@ export default function BookingWizard() {
 
     const draft = loadDraft();
     if (draft?.form) {
-      const { customerName, customerEmail, customerPhone, notes, paymentMethod } = draft.form;
+      const { customerName, customerEmail, customerPhone, serviceAddress, notes, paymentMethod } = draft.form;
       setForm((f) => ({
         ...f,
         customerName: customerName || f.customerName,
         customerEmail: customerEmail || f.customerEmail,
         customerPhone: customerPhone || f.customerPhone,
+        serviceAddress: serviceAddress || f.serviceAddress,
         notes: notes || f.notes,
         paymentMethod: paymentMethod || f.paymentMethod,
       }));
@@ -204,7 +244,10 @@ export default function BookingWizard() {
       if (draft.date) setDate(draft.date);
       if (draft.date && draft.slotStart) {
         restoreSlot.current = draft.slotStart;
-        setStep(Math.min(Math.max(draft.step ?? 1, 1), STEPS.length - 1));
+        // Un borrador guardado antes de pedir la dirección no puede
+        // saltar a "Confirmar": vuelve a "Tus datos" para escribirla.
+        const lastStep = addressReady(draft.form?.serviceAddress) ? STEPS.length - 1 : 2;
+        setStep(Math.min(Math.max(draft.step ?? 1, 1), lastStep));
       } else {
         setStep(Math.min(draft.step ?? 0, 1));
       }
@@ -244,6 +287,7 @@ export default function BookingWizard() {
         customerName: form.customerName,
         customerEmail: form.customerEmail,
         customerPhone: form.customerPhone,
+        serviceAddress: form.serviceAddress,
         notes: form.notes,
         paymentMethod: form.paymentMethod,
       },
@@ -341,7 +385,13 @@ export default function BookingWizard() {
     setNextFree({ loading: true, date: null, slot: null });
     api
       .get(`/availability/next${qs({ serviceId: service.id })}`)
-      .then((data) => !cancelled && setNextFree({ loading: false, date: data.date, slot: data.slot }))
+      .then((data) => {
+        if (cancelled) return;
+        // La API ya no propone días fuera de la temporada; se comprueba
+        // igual para no ofrecer un botón que la reserva rechazaría.
+        const ok = data.date && inSeason(serviceSeason(service), data.date);
+        setNextFree({ loading: false, date: ok ? data.date : null, slot: ok ? data.slot : null });
+      })
       .catch(() => !cancelled && setNextFree({ loading: false, date: null, slot: null }));
     return () => {
       cancelled = true;
@@ -373,8 +423,8 @@ export default function BookingWizard() {
     setFindingNext(true);
     try {
       const data = await api.get(`/availability/next${qs({ serviceId: service.id, after: date })}`);
-      if (data.date) chooseDate(data.date);
-      else toast.info('No vemos más días con cupo en la agenda abierta. Escríbenos por WhatsApp.');
+      if (data.date && inSeason(serviceSeason(service), data.date)) chooseDate(data.date);
+      else toast.info('No vemos más días con cupo para este servicio en la agenda abierta. Escríbenos por WhatsApp.');
     } catch {
       toast.error('No pudimos buscar otro día. Inténtalo de nuevo.');
     } finally {
@@ -385,23 +435,29 @@ export default function BookingWizard() {
   // ── Navegación entre pasos ─────────────────────────────────────────
 
   const phoneProblem = phoneError(form.customerPhone);
+  const hasAddress = addressReady(form.serviceAddress);
 
   const canContinue = useMemo(
     () =>
       [
         Boolean(service),
         Boolean(slot),
-        Boolean(form.customerName && form.customerEmail && form.customerPhone) && !phoneProblem,
+        Boolean(form.customerName && form.customerEmail && form.customerPhone) && !phoneProblem && hasAddress,
         true,
       ][step],
-    [step, service, slot, form, phoneProblem],
+    [step, service, slot, form, phoneProblem, hasAddress],
   );
 
   // Qué falta para seguir, dicho en la misma barra del botón.
+  const detailsMissing = phoneProblem
+    ? 'Revisa tu número de WhatsApp'
+    : !(form.customerName && form.customerEmail && form.customerPhone)
+      ? 'Completa tu nombre, WhatsApp, correo y dirección'
+      : 'Escribe dónde te maquillo';
   const missing = [
     'Elige un servicio para seguir',
     date ? 'Elige una hora para seguir' : 'Elige un día para seguir',
-    phoneProblem ? 'Revisa tu número de WhatsApp' : 'Completa tu nombre, WhatsApp y correo',
+    detailsMissing,
     null,
   ][step];
 
@@ -430,6 +486,7 @@ export default function BookingWizard() {
         customerName: form.customerName.trim(),
         customerEmail: form.customerEmail.trim(),
         customerPhone: phoneForSubmit(form.customerPhone),
+        serviceAddress: form.serviceAddress.trim(),
         paymentMethod: form.paymentMethod,
         notes: form.notes.trim() || undefined,
         source: readSource(),
@@ -611,6 +668,7 @@ export default function BookingWizard() {
                   onFindNextDay={findNextDay}
                   findingNext={findingNext}
                   minNoticeHours={settings.minNoticeHours}
+                  occasion={occasion}
                   first={first}
                 />
               )}
@@ -626,6 +684,7 @@ export default function BookingWizard() {
                   occasion={occasion}
                   onOccasionChange={setOccasion}
                   service={service}
+                  settings={settings}
                   first={first}
                 />
               )}
@@ -710,6 +769,8 @@ export default function BookingWizard() {
           occasion={occasion}
           slot={slot}
           timezone={settings.timezone}
+          serviceAddress={hasAddress ? form.serviceAddress.trim() : null}
+          homeVisit={homeVisitShort(settings)}
           paymentMethod={step >= 3 ? form.paymentMethod : null}
         />
       </div>
@@ -723,6 +784,7 @@ const GROUPS = [
   { key: 'PAQUETE', title: 'Paquetes', hint: 'Maquillaje y peinado juntos, con mejor precio' },
   { key: 'MAQUILLAJE', title: 'Maquillaje', hint: null },
   { key: 'PEINADO', title: 'Peinado', hint: null },
+  { key: 'TALLER', title: 'Talleres', hint: null },
 ];
 
 function StepService({ services, occasion, selected, advice, missingSlug, first, onSelect, onContinue, headingRef }) {
@@ -742,12 +804,16 @@ function StepService({ services, occasion, selected, advice, missingSlug, first,
   ];
 
   const wedding = occasion?.slug === 'bodas';
+  // Todo es a domicilio: en vez de preguntar "¿estudio o domicilio?" se
+  // pide de una vez dónde y a qué hora, que es lo que Yury necesita para
+  // cuadrar el desplazamiento.
   const adviceMessage = [
     `Hola ${first}, quiero asesoría.`,
     `Evento: ${occasion ? occasion.name : ''}`,
     'Fecha aproximada: ',
+    'Hora en que necesito estar lista: ',
     'Somos __ personas.',
-    'Lugar: estudio / domicilio',
+    'Dirección y barrio (o municipio): ',
   ].join('\n');
 
   return (
@@ -776,8 +842,8 @@ function StepService({ services, occasion, selected, advice, missingSlug, first,
         )}
       >
         <p className="text-sm leading-relaxed text-ink-700">
-          <span className="font-medium text-ink-800">¿Es para tu boda, para varias personas o a domicilio?</span>{' '}
-          Habla con {first} y lo cuadran juntas.
+          <span className="font-medium text-ink-800">¿Es para tu boda, para varias personas o de madrugada?</span>{' '}
+          Escríbeme y lo cuadramos juntas.
         </p>
         <WhatsAppButtonLink
           message={adviceMessage}
@@ -816,6 +882,7 @@ function StepService({ services, occasion, selected, advice, missingSlug, first,
 
 function ServiceOption({ item, active, onSelect }) {
   const price = priceLabel(item);
+  const season = seasonText(item);
   return (
     <label
       className={cx(
@@ -867,6 +934,17 @@ function ServiceOption({ item, active, onSelect }) {
           </span>
           <span className="text-xs text-ink-500">· {duration(item.durationMinutes)}</span>
         </span>
+
+        {/* Temporada: se ve antes de elegir, no al llegar al calendario. */}
+        {season && (
+          <span className="mt-2 flex items-center gap-1.5 text-xs font-medium text-gold-700">
+            <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="none" aria-hidden="true">
+              <rect x="2" y="3" width="12" height="11" rx="2" stroke="currentColor" strokeWidth="1.3" />
+              <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+            {season}
+          </span>
+        )}
       </span>
     </label>
   );
@@ -880,26 +958,37 @@ function ServiceOption({ item, active, onSelect }) {
 function AdvicePanel({ service, first, onContinue }) {
   const ref = useRef(null);
   const reduced = useReducedMotion();
-  const bridal = isBridalService(service);
+  const couples = isCouplesService(service);
+  const bridal = !couples && isBridalService(service);
 
   useEffect(() => {
     ref.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'nearest' });
   }, [service.id, reduced]);
 
-  const message = bridal
-    ? `Hola ${first}, me interesa el ${service.name}. Mi boda es el día __ y quiero asesoría.`
-    : `Hola ${first}, quiero cotizar el ${service.name}. Mi evento es el día __.`;
+  // El paquete de novios no es un maquillaje: son sesiones en pareja que
+  // se acuerdan conversando (de 5 a 10), así que tiene su propio texto.
+  const message = couples
+    ? `Hola ${first}, nos interesa el ${service.name}. Nuestra boda es el día __ y queremos saber cómo serían las sesiones.`
+    : bridal
+      ? `Hola ${first}, me interesa el ${service.name}. Mi boda es el día __ y quiero asesoría.`
+      : `Hola ${first}, quiero cotizar el ${service.name}. Mi evento es el día __.`;
+
+  const title = couples
+    ? 'Este acompañamiento lo armamos conversando'
+    : bridal
+      ? 'Con las novias primero hablamos'
+      : 'Este servicio se cotiza por WhatsApp';
+
+  const text = couples
+    ? 'Es en pareja y a la medida: acordamos juntos cuántas sesiones necesitan (de 5 a 10) y el valor depende de esa cantidad.'
+    : bridal
+      ? 'Antes de separar la fecha conviene conversar: cuadramos la hora de inicio, dónde te maquillo y si te acompaña alguien más.'
+      : 'El valor depende de lo que necesites. Cuéntame y te respondo con el precio.';
 
   return (
     <div ref={ref} role="region" aria-label="Antes de agendar" className="mt-4 rounded-2xl border border-brand-300 bg-brand-50 p-5">
-      <p className="font-display text-xl text-ink-800">
-        {bridal ? 'Con las novias primero hablamos' : 'Este servicio se cotiza por WhatsApp'}
-      </p>
-      <p className="mt-2 text-sm leading-relaxed text-ink-600">
-        {bridal
-          ? 'Antes de separar la fecha conviene conversar: cuadramos la hora de inicio, el lugar y si te acompaña alguien más.'
-          : `El valor depende de lo que necesites. Cuéntale a ${first} y te responde con el precio.`}
-      </p>
+      <p className="font-display text-xl text-ink-800">{title}</p>
+      <p className="mt-2 text-sm leading-relaxed text-ink-600">{text}</p>
       <div className="mt-4 flex flex-col gap-3 sm:flex-row">
         <WhatsAppButtonLink message={message} variant="primary">
           Hablar con {first} por WhatsApp
@@ -930,11 +1019,15 @@ function StepDateTime({
   onFindNextDay,
   findingNext,
   minNoticeHours,
+  occasion,
   first,
   headingRef,
   slotsRef,
 }) {
+  const earlyMorning = isEarlyMorningCase(service, occasion);
   const dayLabel = date ? capFirst(longDate(`${date}T12:00:00`, timezone)) : '';
+  // Memorizada: el calendario la compara entre renders.
+  const season = useMemo(() => serviceSeason(service), [service?.availableFrom, service?.availableUntil]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const horizonNote = (lastDateISO) => {
     const last = longDate(`${lastDateISO}T12:00:00`, timezone).replace(/^\S+,\s*/, '').replace(/ de \d{4}$/, '');
@@ -962,10 +1055,31 @@ function StepDateTime({
         Necesitamos {minNoticeHours} h de antelación.
       </p>
 
+      {/*
+       * Las madrugadas (desde las 4:00 a. m.) no están en la agenda en
+       * línea: Yury las cuadra solo por WhatsApp y con 20 días de
+       * anticipación. Una línea, solo cuando aplica, para que la novia o
+       * la quinceañera no busque en vano un horario que aquí no sale.
+       */}
+      {earlyMorning && (
+        <div className="mt-4 rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm leading-relaxed text-ink-700">
+          <p>
+            ¿Necesitas estar lista de madrugada (desde las 4:00 a. m.)? Para grados, bodas y quinceañeras
+            esos turnos los cuadro solo por WhatsApp, con mínimo 20 días de anticipación.
+          </p>
+          <WhatsAppTextLink
+            message={`Hola ${first}, necesito ${service?.name ?? 'maquillaje'} de madrugada${occasion ? ` (${occasion.name.toLowerCase()})` : ''}. La fecha es el __ y necesito estar lista a las __.`}
+          >
+            Pedir turno de madrugada
+          </WhatsAppTextLink>
+        </div>
+      )}
+
       <div className="mt-7 grid gap-5 lg:grid-cols-[minmax(0,22rem)_1fr] lg:gap-6">
         <Calendar
           key={service?.id}
           serviceId={service?.id}
+          season={season}
           value={date}
           onChange={onDateChange}
           timezone={timezone}
@@ -1085,11 +1199,14 @@ function StepDetails({
   occasion,
   onOccasionChange,
   service,
+  settings,
   first,
   headingRef,
 }) {
   const [phoneTouched, setPhoneTouched] = useState(false);
+  const [addressTouched, setAddressTouched] = useState(false);
   const phoneProblem = phoneError(form.customerPhone);
+  const addressProblem = addressError(form.serviceAddress);
   const phoneHint = form.customerPhone && !phoneProblem
     ? `Te escribiremos al ${displayPhone(form.customerPhone)}.`
     : 'Por aquí te confirmamos la cita. Basta con los 10 dígitos.';
@@ -1097,10 +1214,10 @@ function StepDetails({
   return (
     <div>
       <h2 id="titulo-paso" ref={headingRef} tabIndex={-1} className="text-2xl focus:outline-none sm:text-3xl">
-        Tus datos de contacto
+        Tus datos y dónde te maquillo
       </h2>
       <p className="mt-2 text-sm leading-relaxed text-ink-500">
-        Los usamos solo para confirmar la cita y avisarte de cualquier cambio.
+        Los uso solo para confirmar tu cita, llegar a donde estés y avisarte de cualquier cambio.
         {!isAuthenticated && ' No necesitas cuenta para reservar.'}
       </p>
 
@@ -1141,6 +1258,25 @@ function StepDetails({
           error={errors.customerEmail}
           placeholder="tucorreo@ejemplo.com"
           hint="Te enviamos la confirmación por escrito."
+          className="sm:col-span-2"
+        />
+
+        {/*
+         * Obligatorio: no hay estudio, Yury va hasta la clienta. Se valida
+         * con los mismos límites que la API (5 a 200) y el error solo sale
+         * al salir del campo, para no regañar mientras se escribe.
+         */}
+        <Input
+          label={addressLabel(service)}
+          required
+          autoComplete="street-address"
+          value={form.serviceAddress}
+          onChange={onChange('serviceAddress')}
+          onBlur={() => setAddressTouched(true)}
+          error={errors.serviceAddress || (addressTouched ? addressProblem : null)}
+          placeholder="Dirección, barrio y ciudad o municipio"
+          hint={chargesHomeVisit(service) ? homeVisitHint(settings) : 'Dirección, barrio y ciudad o municipio.'}
+          maxLength={ADDRESS_MAX}
           className="sm:col-span-2"
         />
 
@@ -1188,17 +1324,24 @@ function StepDetails({
           maxLength={1000}
           rows={4}
           className="sm:col-span-2"
-          placeholder="Color del vestido, alergias, referencias que te gustan, si el evento es al aire libre…"
+          placeholder="Color del vestido, alergias, referencias que te gustan, cómo llegar (portería, apartamento)…"
           hint="Todo lo que nos cuentes ayuda a preparar mejor tu look."
         />
       </div>
 
+      {/*
+       * La ocasión se elige aquí, después del paso de fecha: si es grados,
+       * bodas o quinceañeras, la regla de las madrugadas se repite en este
+       * paso, porque en el calendario todavía no se sabía.
+       */}
       <p className="mt-5 text-sm text-ink-600">
-        ¿Son varias personas o es a domicilio?{' '}
+        {isEarlyMorningCase(service, occasion)
+          ? '¿Son varias personas o necesitas estar lista de madrugada (desde las 4:00 a. m.)? Esos turnos los cuadro solo por WhatsApp, con mínimo 20 días de anticipación.'
+          : '¿Son varias personas o necesitas estar lista de madrugada?'}{' '}
         <WhatsAppTextLink
-          message={`Hola ${first}, quiero reservar ${service?.name ?? 'una cita'}. Somos __ personas / es a domicilio en __.`}
+          message={`Hola ${first}, quiero reservar ${service?.name ?? 'una cita'}. Somos __ personas y necesitamos estar listas a las __.`}
         >
-          Escríbenos
+          Escríbeme
         </WhatsAppTextLink>
       </p>
 
@@ -1224,18 +1367,28 @@ function StepDetails({
 const PAYMENT_OPTIONS = [
   {
     value: 'TRANSFERENCIA',
-    title: 'Transferencia bancaria',
+    title: 'Transferencia por Nequi o Daviplata',
     description: 'Te enviamos los datos por correo. Confirmas enviando el comprobante.',
+    depositDescription: 'Te enviamos los datos por correo. Confirmas enviando el comprobante del abono.',
   },
   {
     value: 'EFECTIVO',
     title: 'Efectivo el día de la cita',
     description: 'No adelantas nada. Pagas al terminar el servicio.',
-    // Novias, "desde" y "a cotizar": puede que Yury pida algo para
-    // separar la fecha, así que aquí no se promete "no adelantas nada".
+    // Novias, "desde" y "a cotizar" sin política de abono en Ajustes:
+    // puede que Yury pida algo para separar la fecha, así que aquí no se
+    // promete "no adelantas nada".
     openDescription: 'Pagas al terminar el servicio.',
+    // Con abono, "no adelantas nada" sería falso: la fecha se separa con
+    // el abono y en efectivo se paga lo que falta.
+    depositDescription: 'Separas la fecha con el abono y el resto lo pagas al terminar el servicio.',
   },
 ];
+
+function paymentDescription(option, { deposit, openTerms }) {
+  if (deposit) return option.depositDescription;
+  return (openTerms && option.openDescription) || option.description;
+}
 
 /** Etiqueta y nota del precio según el modo del servicio. */
 function priceRow(service, first) {
@@ -1255,8 +1408,13 @@ function priceRow(service, first) {
 
 function StepConfirm({ form, setForm, service, occasion, slot, settings, first, headingRef }) {
   const price = service ? priceRow(service, first) : null;
+  const homeVisit = chargesHomeVisit(service) ? homeVisitShort(settings) : null;
   const end = slot && service ? new Date(new Date(slot.start).getTime() + service.durationMinutes * 60_000) : null;
   const openTerms = Boolean(service) && (needsConversation(service) || priceLabel(service).mode === 'FROM');
+  const deposit = depositText(settings.depositPercent, service);
+  // Con abono, los datos de pago sirven para los dos medios: el abono se
+  // envía antes aunque el resto se pague en efectivo.
+  const showPayData = Boolean(settings.transferInstructions) && (form.paymentMethod === 'TRANSFERENCIA' || Boolean(deposit));
 
   return (
     <div>
@@ -1297,7 +1455,7 @@ function StepConfirm({ form, setForm, service, occasion, slot, settings, first, 
                 <span>
                   <span className="block font-medium text-ink-800">{option.title}</span>
                   <span className="mt-1 block text-xs leading-relaxed text-ink-500">
-                    {(openTerms && option.openDescription) || option.description}
+                    {paymentDescription(option, { deposit, openTerms })}
                   </span>
                 </span>
               </label>
@@ -1306,20 +1464,30 @@ function StepConfirm({ form, setForm, service, occasion, slot, settings, first, 
         </div>
 
         {/*
-         * Novias, "desde" y "a cotizar": no se promete aquí cómo se separa
-         * la fecha, porque esa regla la define Yury. Se dice quién la confirma.
+         * El abono sale de Ajustes (`depositPercent`). Sin él, en novias,
+         * "desde" y "a cotizar" no se promete cómo se separa la fecha,
+         * porque esa regla la define Yury: se dice quién la confirma.
          */}
-        {openTerms && (
+        {deposit && (
+          <div className="mt-4 rounded-2xl border border-brand-300 bg-brand-50 p-4">
+            <p className="text-sm font-medium leading-relaxed text-ink-800">{deposit}.</p>
+            <p className="mt-1 text-xs leading-relaxed text-ink-600">
+              Tu reserva queda en firme cuando {first} recibe el abono.
+              {openTerms && ` El valor final te lo confirma ${first} por WhatsApp.`}
+            </p>
+          </div>
+        )}
+        {!deposit && openTerms && (
           <p className="mt-4 text-xs leading-relaxed text-ink-500">
             El valor final y la forma de separar la fecha te los confirma {first} por WhatsApp.
           </p>
         )}
       </fieldset>
 
-      {form.paymentMethod === 'TRANSFERENCIA' && settings.transferInstructions && (
+      {showPayData && (
         <div className="mt-5 rounded-2xl border border-line bg-blush p-5">
           <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-brand-700">
-            Datos para la transferencia
+            {deposit ? 'Datos para el abono' : 'Datos para la transferencia'}
           </p>
           <p className="whitespace-pre-line text-sm leading-relaxed text-ink-600">
             {settings.transferInstructions}
@@ -1336,6 +1504,7 @@ function StepConfirm({ form, setForm, service, occasion, slot, settings, first, 
             ['Ocasión', occasion?.name ?? 'Sin especificar'],
             ['Fecha', slot ? capFirst(longDate(slot.start, settings.timezone)) : null],
             ['Hora', slot ? `${time(slot.start, settings.timezone)} – ${time(end, settings.timezone)}` : null],
+            ['Te maquillo en', form.serviceAddress.trim() || null],
             ['A nombre de', form.customerName],
             ['WhatsApp', displayPhone(form.customerPhone)],
             ['Correo', form.customerEmail],
@@ -1354,6 +1523,13 @@ function StepConfirm({ form, setForm, service, occasion, slot, settings, first, 
                 <dt className="text-ink-500">{price.label}</dt>
                 <dd className="font-display text-2xl text-brand-700">{price.value}</dd>
               </div>
+              {/* El domicilio se avisa aparte: no se suma al precio guardado. */}
+              {homeVisit && <p className="mt-1 text-right text-sm font-medium text-ink-700">{homeVisit}</p>}
+              {chargesHomeVisit(service) && (
+                <p className="mt-0.5 text-right text-xs text-ink-500">
+                  Fuera de la ciudad, el domicilio se calcula según el transporte.
+                </p>
+              )}
               {price.note && <p className="mt-1 text-right text-xs text-ink-500">{price.note}</p>}
             </div>
           )}
@@ -1370,7 +1546,7 @@ function StepConfirm({ form, setForm, service, occasion, slot, settings, first, 
 
 // ── Resumen lateral ──────────────────────────────────────────────────
 
-function Summary({ service, occasion, slot, timezone, paymentMethod }) {
+function Summary({ service, occasion, slot, timezone, serviceAddress, homeVisit, paymentMethod }) {
   if (!service) {
     return (
       <aside className="hidden rounded-3xl border border-dashed border-line bg-surface/60 p-6 text-sm text-ink-400 lg:sticky lg:top-24 lg:block">
@@ -1420,6 +1596,12 @@ function Summary({ service, occasion, slot, timezone, paymentMethod }) {
             </div>
           </>
         )}
+        {serviceAddress && (
+          <div className="flex justify-between gap-3">
+            <dt className="shrink-0 text-ink-500">Lugar</dt>
+            <dd className="min-w-0 break-words text-right font-medium text-ink-800">{serviceAddress}</dd>
+          </div>
+        )}
         {paymentMethod && (
           <div className="flex justify-between gap-3">
             <dt className="text-ink-500">Pago</dt>
@@ -1434,6 +1616,7 @@ function Summary({ service, occasion, slot, timezone, paymentMethod }) {
           {price.text}
         </span>
       </div>
+      {homeVisit && <p className="mt-1 text-right text-xs font-medium text-ink-600">{homeVisit}</p>}
     </aside>
   );
 }
@@ -1446,24 +1629,64 @@ function Confirmation({ booking, service, form, settings, isAuthenticated }) {
   const tz = settings.timezone;
 
   const serviceInfo = { ...service, ...booking.service };
-  const price = priceLabel({ ...serviceInfo, priceCents: booking.priceCents, currency: booking.currency });
+  const priced = { ...serviceInfo, priceCents: booking.priceCents, currency: booking.currency };
+  const price = priceLabel(priced);
   // El fin para la clienta es el del servicio, sin el margen de limpieza
   // que la agenda deja después (booking.endAt lo incluye).
   const end = new Date(new Date(booking.startAt).getTime() + serviceInfo.durationMinutes * 60_000);
   const dayLabel = longDate(booking.startAt, tz);
   const hourLabel = time(booking.startAt, tz);
   const transfer = booking.paymentMethod === 'TRANSFERENCIA';
+  // Lo que guardó el servidor manda; el formulario solo por si una API
+  // vieja todavía no la devuelve.
+  const place = (booking.serviceAddress ?? form.serviceAddress ?? '').trim();
+  const fee = chargesHomeVisit(service) ? homeVisitFee(settings) : null;
 
-  const waMessage = transfer
-    ? `Hola ${first}, reservé ${serviceInfo.name} para el ${dayLabel} a las ${hourLabel}. Mi código es ${booking.code}. Te envío el comprobante.`
-    : `Hola ${first}, reservé ${serviceInfo.name} para el ${dayLabel} a las ${hourLabel}. Mi código es ${booking.code}. Quedo atenta a tu confirmación.`;
+  /*
+   * Con abono, la reserva queda en firme cuando Yury lo recibe, sea cual
+   * sea el medio de pago del resto. Con precio fijo ya se sabe cuánto es
+   * y se manda el comprobante; con "desde" o "a cotizar" primero hay que
+   * saber el valor final, así que el mensaje lo pregunta.
+   */
+  const deposit = depositText(settings.depositPercent, priced);
+  const depositData = depositInfo(settings.depositPercent, priced);
+  // Con abono "desde" o "a cotizar" el mensaje pregunta el valor: el
+  // botón no puede decir "Enviar comprobante" aunque sea transferencia.
+  const sendsProof = depositData ? Boolean(depositData.amount) : transfer;
+  const showPayData = Boolean(settings.transferInstructions) && (transfer || Boolean(deposit));
+
+  const booked = `Hola ${first}, reservé ${serviceInfo.name} para el ${dayLabel} a las ${hourLabel}${place ? `, en ${place}` : ''}. Mi código es ${booking.code}.`;
+  const waMessage = depositData
+    ? depositData.amount
+      ? `${booked} Te envío el comprobante del abono del ${depositData.pct} % (${depositData.amount}).`
+      : `${booked} ¿Me confirmas el valor para enviarte el abono del ${depositData.pct} %?`
+    : transfer
+      ? `${booked} Te envío el comprobante.`
+      : `${booked} Quedo atenta a tu confirmación.`;
+
+  const intro = depositData
+    ? depositData.amount
+      ? 'Tu reserva queda en firme con el abono: envía el comprobante por WhatsApp con tu código.'
+      : `Tu reserva queda en firme con el abono: escríbele a ${first} por WhatsApp con tu código y te confirma el valor.`
+    : transfer
+      ? 'Para confirmarla, envía el comprobante de la transferencia por WhatsApp con tu código.'
+      : `Para confirmarla, escríbele a ${first} por WhatsApp con tu código.`;
+
+  const firstStep = depositData
+    ? depositData.amount
+      ? 'Haz el abono y envía el comprobante por WhatsApp con tu código.'
+      : `Escríbenos por WhatsApp con tu código: ${first} te confirma el valor final y el abono.`
+    : transfer
+      ? 'Envía el comprobante por WhatsApp con tu código.'
+      : 'Escríbenos por WhatsApp con tu código.';
 
   const event = {
     uid: `${booking.code}@reservas`,
     title: `${serviceInfo.name} · ${settings.brandName}`,
     start: booking.startAt,
     end,
-    location: settings.addressLine || undefined,
+    // El lugar del evento es donde la maquillo, no una dirección del negocio.
+    location: place || undefined,
     details: `Código de reserva: ${booking.code}`,
   };
 
@@ -1502,15 +1725,13 @@ function Confirmation({ booking, service, form, settings, isAuthenticated }) {
 
       <h2 className="mt-7 text-3xl sm:text-4xl">¡Reserva recibida!</h2>
       <p className="text-pretty mx-auto mt-3 max-w-md text-[15px] leading-relaxed text-ink-600">
-        {transfer
-          ? `Para confirmarla, envía el comprobante de la transferencia por WhatsApp con tu código.`
-          : `Para confirmarla, escríbele a ${first} por WhatsApp con tu código.`}{' '}
+        {intro}{' '}
         También te enviamos los detalles a <span className="font-medium text-ink-800">{booking.customerEmail}</span>.
       </p>
 
       <div className="mx-auto mt-6 flex max-w-md flex-col gap-3">
         <WhatsAppButtonLink message={waMessage} variant="primary" size="lg" className="w-full">
-          {transfer ? 'Enviar comprobante por WhatsApp' : `Confirmar por WhatsApp`}
+          {sendsProof ? 'Enviar comprobante por WhatsApp' : 'Confirmar por WhatsApp'}
         </WhatsAppButtonLink>
         <Button
           href={googleCalendarUrl(event)}
@@ -1550,21 +1771,26 @@ function Confirmation({ booking, service, form, settings, isAuthenticated }) {
             ['Servicio', serviceInfo.name],
             ['Fecha', capFirst(dayLabel)],
             ['Hora', `${hourLabel} – ${time(end, tz)}`],
+            ['Te maquillo en', place || null],
             ['Medio de pago', PAYMENT_LABEL[booking.paymentMethod]],
             // "Valor estimado" solo con "desde": junto a "A cotizar" no dice nada.
             [price.mode === 'FROM' ? 'Valor estimado' : 'Valor', price.text],
-          ].map(([label, value]) => (
-            <div key={label} className="flex flex-wrap justify-between gap-x-6 gap-y-1">
-              <dt className="text-ink-500">{label}</dt>
-              <dd className="text-right font-medium text-ink-800">{value}</dd>
-            </div>
-          ))}
+            ['Domicilio', fee ? `+ ${fee} dentro de Pasto · fuera, según el transporte` : null],
+            ['Abono para separar', depositData?.short],
+          ]
+            .filter(([, value]) => value)
+            .map(([label, value]) => (
+              <div key={label} className="flex flex-wrap justify-between gap-x-6 gap-y-1">
+                <dt className="text-ink-500">{label}</dt>
+                <dd className="max-w-[65%] break-words text-right font-medium text-ink-800">{value}</dd>
+              </div>
+            ))}
         </dl>
 
-        {transfer && settings.transferInstructions && (
+        {showPayData && (
           <div className="mt-6 rounded-2xl bg-blush p-4">
             <p className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-brand-700">
-              Datos para la transferencia
+              {deposit ? 'Datos para el abono' : 'Datos para la transferencia'}
             </p>
             <p className="whitespace-pre-line text-sm leading-relaxed text-ink-600">
               {settings.transferInstructions}
@@ -1577,9 +1803,7 @@ function Confirmation({ booking, service, form, settings, isAuthenticated }) {
           <ol className="mt-3 space-y-3 text-sm leading-relaxed text-ink-600">
             <li className="flex gap-3">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blush text-xs font-semibold text-brand-700">1</span>
-              {transfer
-                ? 'Envía el comprobante por WhatsApp con tu código.'
-                : 'Escríbenos por WhatsApp con tu código.'}
+              {firstStep}
             </li>
             <li className="flex gap-3">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blush text-xs font-semibold text-brand-700">2</span>
@@ -1587,27 +1811,19 @@ function Confirmation({ booking, service, form, settings, isAuthenticated }) {
             </li>
             <li className="flex gap-3">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blush text-xs font-semibold text-brand-700">3</span>
+              {/*
+               * No hay estudio: es Yury la que llega. Se repite la dirección
+               * que escribió la clienta para que la revise, y se le dice por
+               * dónde corregirla o dar indicaciones para llegar.
+               */}
               <span>
-                {settings.addressLine ? (
+                {place ? (
                   <>
-                    El día de tu cita te esperamos en {settings.addressLine}
-                    {settings.mapUrl && (
-                      <>
-                        {' · '}
-                        <a
-                          href={settings.mapUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-medium text-brand-700 underline underline-offset-4"
-                        >
-                          ver en el mapa
-                        </a>
-                      </>
-                    )}
-                    .
+                    Te maquillo en: <span className="font-medium text-ink-800">{place}</span>. Si cambia el lugar o
+                    hay indicaciones para llegar (portería, apartamento), cuéntamelo por WhatsApp.
                   </>
                 ) : (
-                  'El día de tu cita te esperamos a la hora reservada.'
+                  'Escríbeme por WhatsApp la dirección donde te maquillo y llego a la hora reservada.'
                 )}
               </span>
             </li>

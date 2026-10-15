@@ -3,7 +3,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { api, qs } from '../../lib/api.js';
 import { Spinner, cx } from '../ui/index.jsx';
 import { toDateISO } from '../../lib/format.js';
-import { capFirst } from './bookingHelpers.js';
+import { capFirst, inSeason, seasonSentence } from './bookingHelpers.js';
 
 /**
  * Calendario de disponibilidad.
@@ -24,6 +24,14 @@ import { capFirst } from './bookingHelpers.js';
  * (`renderHorizonNote`). Antes se podía avanzar sin fin y todo salía
  * gris con la leyenda "Sin cupo": una novia que buscaba junio entendía
  * que no había agenda.
+ *
+ * Temporada: un servicio puede reservarse solo PARA ciertos días (las
+ * Catrinas, del 22 al 31 de octubre), aunque la reserva se haga antes.
+ * El calendario abre en el primer mes de la temporada, no deja salir de
+ * ella y explica en una línea por qué el resto del mes no se puede
+ * elegir. El servidor marca esos días con `reason: 'season'`; aun así,
+ * aquí se vuelven a cerrar los que caigan fuera por si la API todavía no
+ * lo hace: el calendario solo puede restringir, nunca abrir un día.
  */
 
 const DAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
@@ -42,6 +50,7 @@ const UNAVAILABLE_STYLE = {
   beyond: 'cursor-not-allowed border border-dashed border-line text-ink-400/70',
   closed: 'cursor-not-allowed text-ink-400/60',
   past: 'cursor-not-allowed text-ink-400/60',
+  season: 'cursor-not-allowed text-ink-400/40',
 };
 
 const UNAVAILABLE_LABEL = {
@@ -49,6 +58,7 @@ const UNAVAILABLE_LABEL = {
   beyond: ', aún no abierto para reservas',
   closed: ', cerrado',
   past: ', ya pasó',
+  season: ', fuera de la temporada de este servicio',
 };
 
 /** Hasta cuántos meses se salta solo si el mes de hoy no tiene cupo. */
@@ -57,21 +67,29 @@ const MAX_AUTO_ADVANCE = 12;
 const pad = (n) => String(n).padStart(2, '0');
 const iso = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
 
-export default function Calendar({ serviceId, value, onChange, timezone, renderHorizonNote }) {
+export default function Calendar({ serviceId, season = null, value, onChange, timezone, renderHorizonNote }) {
   const reduced = useReducedMotion();
   const todayISO = useMemo(() => toDateISO(new Date(), timezone), [timezone]);
 
+  // Sin fecha elegida se abre en hoy o, si la temporada empieza más
+  // adelante, en su primer día: nadie tiene que buscar octubre a mano.
   const [cursor, setCursor] = useState(() => {
-    const base = value ? new Date(`${value}T12:00:00`) : new Date(`${todayISO}T12:00:00`);
+    const start = season?.from && season.from > todayISO ? season.from : todayISO;
+    const base = new Date(`${value ?? start}T12:00:00`);
     return { year: base.getFullYear(), month: base.getMonth() + 1 };
   });
   const [days, setDays] = useState([]);
+  // Lo que diga el servidor manda; mientras no responda (o si aún no
+  // manda `season`), vale la temporada del servicio que llega por props.
+  const [serverSeason, setServerSeason] = useState(undefined);
   const [loadedKey, setLoadedKey] = useState(null);
   const [lastBookableDate, setLastBookableDate] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [focusedISO, setFocusedISO] = useState(value ?? todayISO);
+  const [focusedISO, setFocusedISO] = useState(
+    () => value ?? (season?.from && season.from > todayISO ? season.from : todayISO),
+  );
   const [direction, setDirection] = useState(0);
   const [skippedFrom, setSkippedFrom] = useState(null);
 
@@ -98,6 +116,7 @@ export default function Calendar({ serviceId, value, onChange, timezone, renderH
       })
       .then((data) => {
         setDays(data.days ?? []);
+        if (data.season !== undefined) setServerSeason(data.season);
         if (data.lastBookableDate) setLastBookableDate(data.lastBookableDate);
         setLoadedKey(`${cursor.year}-${pad(cursor.month)}`);
       })
@@ -111,12 +130,37 @@ export default function Calendar({ serviceId, value, onChange, timezone, renderH
     return () => controller.abort();
   }, [serviceId, cursor.year, cursor.month, reloadKey]);
 
-  const availability = useMemo(() => new Map(days.map((d) => [d.date, d])), [days]);
+  const activeSeason = serverSeason !== undefined ? serverSeason : season;
 
-  const horizonKey = lastBookableDate?.slice(0, 7) ?? null;
-  const canGoBack = cursorKey > todayISO.slice(0, 7);
+  // Los días fuera de la temporada se cierran aunque el servidor no lo
+  // haya hecho (los ya pasados conservan su motivo).
+  const shownDays = useMemo(
+    () =>
+      days.map((d) =>
+        inSeason(activeSeason, d.date) || d.reason === 'past'
+          ? d
+          : { ...d, available: false, slotCount: 0, reason: 'season' },
+      ),
+    [days, activeSeason],
+  );
+  const availability = useMemo(() => new Map(shownDays.map((d) => [d.date, d])), [shownDays]);
+
+  /*
+   * Último día reservable: el horizonte de la agenda o el fin de la
+   * temporada, lo que llegue antes (los dos límites se aplican). Si manda
+   * la temporada, la nota de "¿tu evento es después? escríbenos" no
+   * aplica: después del 31 de octubre no hay Catrinas.
+   */
+  const seasonEnd = activeSeason?.until ?? null;
+  const seasonBinds = Boolean(seasonEnd) && (!lastBookableDate || seasonEnd <= lastBookableDate);
+  const lastDate = seasonBinds ? seasonEnd : lastBookableDate;
+  const horizonKey = lastDate?.slice(0, 7) ?? null;
+  const firstKey =
+    activeSeason?.from && activeSeason.from > todayISO ? activeSeason.from.slice(0, 7) : todayISO.slice(0, 7);
+  const canGoBack = cursorKey > firstKey;
   const canGoForward = !horizonKey || cursorKey < horizonKey;
   const atHorizon = Boolean(horizonKey) && cursorKey >= horizonKey;
+  const seasonLine = seasonSentence(activeSeason);
 
   // Rejilla del mes empezando en lunes.
   const cells = useMemo(() => {
@@ -133,7 +177,7 @@ export default function Calendar({ serviceId, value, onChange, timezone, renderH
   // Salto automático al primer mes con cupo (solo al abrir).
   useEffect(() => {
     if (!autoAdvance.current || loading || loadedKey !== cursorKey) return;
-    const found = days.some((d) => d.available);
+    const found = shownDays.some((d) => d.available);
     if (found || !canGoForward || autoAdvanced.current >= MAX_AUTO_ADVANCE) {
       autoAdvance.current = false;
       // Si se llegó al final sin cupo, la nota de "te mostramos el primer
@@ -148,7 +192,7 @@ export default function Calendar({ serviceId, value, onChange, timezone, renderH
       const next = new Date(c.year, c.month, 1);
       return { year: next.getFullYear(), month: next.getMonth() + 1 };
     });
-  }, [days, loading, loadedKey, cursorKey, canGoForward]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [shownDays, loading, loadedKey, cursorKey, canGoForward]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Al cambiar de mes con el teclado (RePág/AvPág) se lleva el foco al
   // primer día seleccionable. Con los botones no: quien pulsa "Mes
@@ -231,8 +275,20 @@ export default function Calendar({ serviceId, value, onChange, timezone, renderH
     }
   };
 
+  // Siempre hay un día en el orden de tabulación, aunque el mes se haya
+  // movido solo (salto automático o temporada) y el día enfocado quede en
+  // otro mes: si no, con el teclado no se podía entrar a la rejilla. Un
+  // día cerrado es un botón deshabilitado y no recibe el foco, así que
+  // tampoco sirve (p. ej. el 22 de octubre lleno al abrir la temporada).
+  const focusable = (c) => Boolean(c) && Boolean(availability.get(c)?.available);
+  const tabbableISO =
+    cells.includes(focusedISO) && focusable(focusedISO)
+      ? focusedISO
+      : (cells.find(focusable) ?? (cells.includes(focusedISO) ? focusedISO : cells.find(Boolean)));
+
   const monthLabel = `${MONTHS[cursor.month - 1]} de ${cursor.year}`;
-  const hasBeyond = days.some((d) => d.reason === 'beyond');
+  const hasBeyond = shownDays.some((d) => d.reason === 'beyond');
+  const hasSeason = shownDays.some((d) => d.reason === 'season');
 
   return (
     <div className="rounded-3xl border border-line bg-surface p-3 shadow-soft sm:p-6">
@@ -259,7 +315,13 @@ export default function Calendar({ serviceId, value, onChange, timezone, renderH
           onClick={() => move(1)}
           disabled={!canGoForward}
           className="flex h-11 w-11 items-center justify-center rounded-full border border-line text-ink-600 transition enabled:hover:border-brand-300 enabled:hover:bg-blush disabled:cursor-not-allowed disabled:opacity-35"
-          aria-label={canGoForward ? 'Mes siguiente' : 'Mes siguiente (aún no hay agenda abierta)'}
+          aria-label={
+            canGoForward
+              ? 'Mes siguiente'
+              : seasonBinds
+                ? 'Mes siguiente (fuera de la temporada de este servicio)'
+                : 'Mes siguiente (aún no hay agenda abierta)'
+          }
         >
           <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" aria-hidden="true">
             <path d="m6 3.5 4.5 4.5L6 12.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -312,7 +374,7 @@ export default function Calendar({ serviceId, value, onChange, timezone, renderH
                     <button
                       type="button"
                       data-date={dateISO}
-                      tabIndex={focusedISO === dateISO ? 0 : -1}
+                      tabIndex={tabbableISO === dateISO ? 0 : -1}
                       disabled={!isAvailable}
                       onClick={() => {
                         setFocusedISO(dateISO);
@@ -372,7 +434,17 @@ export default function Calendar({ serviceId, value, onChange, timezone, renderH
         </p>
       )}
 
-      {atHorizon && lastBookableDate && renderHorizonNote && (
+      {seasonLine && (
+        <p className="mt-4 flex items-start gap-2 text-xs leading-relaxed text-ink-600">
+          <svg viewBox="0 0 16 16" className="mt-px h-3.5 w-3.5 shrink-0 text-brand-500" fill="none" aria-hidden="true">
+            <rect x="2" y="3" width="12" height="11" rx="2" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+          </svg>
+          {seasonLine}
+        </p>
+      )}
+
+      {atHorizon && !seasonBinds && lastBookableDate && renderHorizonNote && (
         <div className="mt-4">{renderHorizonNote(lastBookableDate)}</div>
       )}
 
@@ -401,6 +473,14 @@ export default function Calendar({ serviceId, value, onChange, timezone, renderH
           <span className="flex items-center gap-2">
             <span className="h-3 w-3 rounded border border-dashed border-ink-400" aria-hidden="true" />
             Aún no abierto
+          </span>
+        )}
+        {hasSeason && (
+          <span className="flex items-center gap-1.5">
+            <span className="text-[11px] font-medium text-ink-400/40" aria-hidden="true">
+              12
+            </span>
+            Fuera de temporada
           </span>
         )}
       </div>

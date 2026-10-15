@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { useSettings } from '../../context/SettingsContext.jsx';
+import { toDateISO } from '../../lib/format.js';
+import { seasonOver, serviceSeason } from '../booking/bookingHelpers.js';
 
 /**
  * El servicio de temporada (la Catrina), si está activo.
@@ -14,9 +16,16 @@ import { useSettings } from '../../context/SettingsContext.jsx';
  *
  * La franja (en el Layout) y el inicio lo piden a la vez: comparten la
  * misma petición, que se repite como mucho cada 5 minutos.
+ *
+ * En temporada puede haber más de un servicio (Catrinas y
+ * caracterización, Pintucaritas): `services` los trae todos, con la
+ * Catrina primero, y `service` sigue siendo solo la Catrina para la
+ * franja. Uno cuya temporada ya terminó (`availableUntil` pasado) no
+ * cuenta: el asistente tampoco lo ofrece.
  */
 
 export const CATRINA_SLUG = 'maquillaje-artistico-de-catrina';
+const PINTUCARITAS_SLUG = 'pintucaritas-y-maquillaje-infantil';
 
 const FRESH_FOR_MS = 5 * 60 * 1000;
 let cache = { at: 0, promise: null };
@@ -52,28 +61,48 @@ export function findCatrina(services = []) {
 }
 
 /**
- * `{ service, ready }`. Fuera de temporada no pide nada a la API y
- * responde `{ service: null, ready: true }`.
+ * Servicios de temporada: los que tienen fechas propias (`availableFrom`
+ * / `availableUntil`) más la Catrina y las Pintucaritas, que son de la
+ * temporada de Halloween aunque no tengan fechas. Mismo respaldo por
+ * nombre que findCatrina. La Catrina va primero; el resto, en el orden
+ * del panel.
+ */
+export function findSeasonal(services = []) {
+  const catrina = findCatrina(services);
+  const rest = services.filter(
+    (s) =>
+      s !== catrina &&
+      (serviceSeason(s) || s.slug === PINTUCARITAS_SLUG || /pintucarita/i.test(s.name ?? '')),
+  );
+  return catrina ? [catrina, ...rest] : rest;
+}
+
+/**
+ * `{ service, services, ready }`. Fuera de temporada no pide nada a la API y
+ * responde `{ service: null, services: [], ready: true }`.
  */
 export function useSeasonalService() {
-  const { theme } = useSettings();
+  const { theme, timezone } = useSettings();
   const inSeason = theme === 'HALLOWEEN';
-  const [state, setState] = useState({ service: null, ready: !inSeason });
+  const [state, setState] = useState({ service: null, services: [], ready: !inSeason });
 
   useEffect(() => {
     if (!inSeason) {
-      setState({ service: null, ready: true });
+      setState({ service: null, services: [], ready: true });
       return undefined;
     }
     let cancelled = false;
     setState((prev) => ({ ...prev, ready: false }));
     activeServices().then((services) => {
-      if (!cancelled) setState({ service: findCatrina(services), ready: true });
+      if (cancelled) return;
+      const today = toDateISO(new Date(), timezone);
+      const open = services.filter((s) => !seasonOver(s, today));
+      setState({ service: findCatrina(open), services: findSeasonal(open), ready: true });
     });
     return () => {
       cancelled = true;
     };
-  }, [inSeason]);
+  }, [inSeason, timezone]);
 
   return state;
 }

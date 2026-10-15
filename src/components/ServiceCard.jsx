@@ -1,9 +1,9 @@
 import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
-import { duration, priceLabel } from '../lib/format.js';
+import { duration, priceLabel, seasonText } from '../lib/format.js';
 import { isSeasonalService, photoProps, visibleImages } from '../lib/catalog.js';
 import { Badge, cx } from './ui/index.jsx';
-import { CheckIcon, StarPlaceholder } from './catalog/icons.jsx';
+import { CalendarIcon, CheckIcon, StarPlaceholder } from './catalog/icons.jsx';
 
 /**
  * Tarjeta de servicio.
@@ -17,6 +17,11 @@ import { CheckIcon, StarPlaceholder } from './catalog/icons.jsx';
  * ninguna etiqueta salvo la de temporada, que sí informa algo; la
  * categoría ya la dice el nombre.
  *
+ * Si el servicio tiene temporada, bajo el nombre va cuándo se puede
+ * hacer ("Solo del 22 al 31 de octubre"): el sello de la foto avisa que
+ * es de temporada, pero sin las fechas la clienta tendría que entrar a
+ * la ficha para saber si le sirve.
+ *
  * `occasionSlug` viaja a la ficha (?ocasion=) para que la reserva llegue
  * con la ocasión ya elegida.
  */
@@ -24,6 +29,7 @@ export default function ServiceCard({ service, index = 0, occasionSlug, classNam
   const reduced = useReducedMotion();
   const cover = visibleImages(service.images)[0];
   const price = priceLabel(service);
+  const season = seasonText(service);
   const highlights = service.includes?.slice(0, 2) ?? [];
   const href = occasionSlug ? `/servicios/${service.slug}?ocasion=${occasionSlug}` : `/servicios/${service.slug}`;
 
@@ -68,6 +74,13 @@ export default function ServiceCard({ service, index = 0, occasionSlug, classNam
           <h3 className="text-xl leading-snug transition-colors group-hover:text-brand-700 sm:text-[1.35rem]">
             {service.name}
           </h3>
+
+          {season && (
+            <p className="mt-1.5 flex items-center gap-1.5 text-sm font-medium text-gold-700">
+              <CalendarIcon className="h-4 w-4 shrink-0" />
+              {season}
+            </p>
+          )}
 
           {/* Lo que incluye dice más que la frase corta, si Yury lo cargó. */}
           {highlights.length > 0 ? (

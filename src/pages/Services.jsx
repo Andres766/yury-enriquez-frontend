@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
-import { duration, priceLabel } from '../lib/format.js';
+import { duration, priceLabel, seasonText } from '../lib/format.js';
 import { groupMenu, isSeasonalService, photoProps, visibleImages } from '../lib/catalog.js';
 import { SectionTitle, LoadingBlock, EmptyState, Badge, Button, Reveal } from '../components/ui/index.jsx';
-import { StarPlaceholder } from '../components/catalog/icons.jsx';
+import { CalendarIcon, StarPlaceholder } from '../components/catalog/icons.jsx';
 
 /**
  * Carta de precios.
@@ -16,7 +16,9 @@ import { StarPlaceholder } from '../components/catalog/icons.jsx';
  * ocasiones. Los botones de arriba llevan a cada sección, no filtran.
  *
  * Un servicio que sirve para varias ocasiones aparece en cada una: es
- * lo que espera quien entra buscando "lo de grados".
+ * lo que espera quien entra buscando "lo de grados". Los talleres van
+ * aparte, en su propia sección (ver groupMenu), y se llega a ella con
+ * /servicios#talleres.
  */
 export default function Services() {
   const [searchParams] = useSearchParams();
@@ -119,6 +121,7 @@ export default function Services() {
 function MenuRow({ service, occasionSlug }) {
   const cover = visibleImages(service.images)[0];
   const price = priceLabel(service);
+  const season = seasonText(service);
   const summary = service.includes?.length ? service.includes.slice(0, 3).join(' · ') : service.shortDescription;
   const href = occasionSlug ? `/servicios/${service.slug}?ocasion=${occasionSlug}` : `/servicios/${service.slug}`;
 
@@ -149,7 +152,16 @@ function MenuRow({ service, occasionSlug }) {
         <p className="mt-1 text-[13px] leading-snug text-ink-500 line-clamp-2">{summary}</p>
         <div className="mt-auto flex flex-wrap items-center gap-2 pt-2 text-xs text-ink-500">
           <span>{duration(service.durationMinutes)}</span>
-          {isSeasonalService(service) && <Badge tone="gold">Temporada</Badge>}
+          {/* Con fechas se dicen cuáles (en minúscula, que se lee mejor que
+              un sello en mayúsculas); sin ellas, el sello "Temporada". */}
+          {season ? (
+            <span className="inline-flex items-center gap-1 font-medium text-gold-700">
+              <CalendarIcon className="h-3.5 w-3.5" />
+              {season}
+            </span>
+          ) : (
+            isSeasonalService(service) && <Badge tone="gold">Temporada</Badge>
+          )}
         </div>
       </div>
     </Link>

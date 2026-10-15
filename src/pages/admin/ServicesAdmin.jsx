@@ -3,7 +3,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { api, ApiError } from '../../lib/api.js';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useSettings } from '../../context/SettingsContext.jsx';
-import { duration, priceLabel, CATEGORY_LABEL, PRICE_MODE_LABEL } from '../../lib/format.js';
+import { duration, priceLabel, seasonText, toDateISO, CATEGORY_LABEL, PRICE_MODE_LABEL } from '../../lib/format.js';
+import { seasonIsOver } from '../../lib/catalog.js';
 import IncludesEditor from '../../components/catalog/IncludesEditor.jsx';
 import PortfolioPicker from '../../components/catalog/PortfolioPicker.jsx';
 import {
@@ -26,6 +27,8 @@ const EMPTY = {
   priceMode: 'FIXED',
   includes: [],
   maxAdvanceDays: null,
+  availableFrom: null,
+  availableUntil: null,
 };
 
 /** Qué ve la clienta con cada modo, para elegir sin adivinar. */
@@ -37,6 +40,7 @@ const PRICE_MODE_HELP = {
 
 export default function ServicesAdmin() {
   const toast = useToast();
+  const settings = useSettings();
   const [services, setServices] = useState([]);
   const [occasions, setOccasions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -81,6 +85,8 @@ export default function ServicesAdmin() {
   }
 
   if (loading) return <LoadingBlock />;
+
+  const today = toDateISO(new Date(), settings.timezone);
 
   return (
     <div>
@@ -131,6 +137,14 @@ export default function ServicesAdmin() {
                   <Badge>{CATEGORY_LABEL[service.category]}</Badge>
                   {service.featured && <Badge tone="gold">Destacado</Badge>}
                   {!service.active && <Badge tone="outline">Oculto</Badge>}
+                  {/* Una temporada vencida no se reserva aunque esté visible:
+                      se avisa para que Yury cambie las fechas del año siguiente. */}
+                  {seasonText(service) && (
+                    <Badge tone={seasonIsOver(service, today) ? 'outline' : 'gold'} className="normal-case !tracking-normal">
+                      {seasonText(service)}
+                      {seasonIsOver(service, today) ? ' · ya pasó' : ''}
+                    </Badge>
+                  )}
                 </div>
                 <p className="mt-1 truncate text-sm text-ink-500">{service.shortDescription}</p>
                 <p className="mt-0.5 text-xs text-ink-400">
@@ -195,6 +209,9 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
     includes: service.includes ?? [],
     // El campo trabaja con texto: vacío = usar el límite general.
     maxAdvanceDays: service.maxAdvanceDays ?? '',
+    // Igual las fechas de temporada: vacío = se reserva todo el año.
+    availableFrom: service.availableFrom ?? '',
+    availableUntil: service.availableUntil ?? '',
   });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -258,6 +275,8 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
       priceMode: form.priceMode,
       includes: form.includes,
       maxAdvanceDays: form.maxAdvanceDays === '' ? null : Number(form.maxAdvanceDays),
+      availableFrom: form.availableFrom || null,
+      availableUntil: form.availableUntil || null,
     };
 
     try {
@@ -318,10 +337,18 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
           <Input label="Nombre" required value={form.name} onChange={set('name')} error={errors.name} maxLength={120} />
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Select label="Categoría" required value={form.category} onChange={set('category')} error={errors.category}>
+            <Select
+              label="Categoría"
+              required
+              value={form.category}
+              onChange={set('category')}
+              error={errors.category}
+              hint={form.category === 'TALLER' ? 'Los talleres salen en su propia sección «Talleres» de la carta.' : undefined}
+            >
               <option value="MAQUILLAJE">Maquillaje</option>
               <option value="PEINADO">Peinado</option>
               <option value="PAQUETE">Paquete (maquillaje + peinado)</option>
+              <option value="TALLER">Taller</option>
             </Select>
 
             <Input
@@ -394,6 +421,8 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
               hint={`Vacío = lo general de Ajustes (${settings.maxAdvanceDays} días). Las novias suelen separar con 6 a 12 meses: 365 deja ver todo el año.`}
             />
           </div>
+
+          <SeasonFields form={form} setForm={setForm} errors={errors} setErrors={setErrors} set={set} />
 
           <Textarea
             label="Descripción corta"
@@ -559,5 +588,61 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
         </footer>
       </motion.div>
     </>
+  );
+}
+
+/**
+ * Temporada del servicio (catrinas: del 22 al 31 de octubre).
+ *
+ * Limita los días PARA los que se reserva, no cuándo se hace la
+ * reserva: con fechas puestas, una clienta puede separar hoy su turno
+ * del 30 de octubre. Las dos fechas son opcionales e inclusive; si
+ * Hasta queda antes de Desde, el servidor lo rechaza y el error sale
+ * en el campo.
+ */
+function SeasonFields({ form, setForm, errors, setErrors, set }) {
+  const preview = seasonText({ availableFrom: form.availableFrom || null, availableUntil: form.availableUntil || null });
+  const clear = () => {
+    setForm((f) => ({ ...f, availableFrom: '', availableUntil: '' }));
+    setErrors((e) => ({ ...e, availableFrom: undefined, availableUntil: undefined }));
+  };
+
+  return (
+    <fieldset>
+      <legend className="label-base">Temporada</legend>
+      <p className="mb-3 text-xs leading-relaxed text-ink-500">
+        Si lo dejas vacío, se reserva todo el año. Con fechas, solo se puede reservar para esos días, aunque la
+        reserva se haga antes.
+      </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Input
+          label="Desde"
+          type="date"
+          value={form.availableFrom}
+          onChange={set('availableFrom')}
+          error={errors.availableFrom}
+        />
+        <Input
+          label="Hasta"
+          type="date"
+          min={form.availableFrom || undefined}
+          value={form.availableUntil}
+          onChange={set('availableUntil')}
+          error={errors.availableUntil}
+        />
+      </div>
+      {preview && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs leading-relaxed text-ink-500">En la web se verá «{preview}».</p>
+          <button
+            type="button"
+            onClick={clear}
+            className="min-h-[44px] text-xs font-medium text-brand-700 transition hover:underline"
+          >
+            Quitar temporada
+          </button>
+        </div>
+      )}
+    </fieldset>
   );
 }

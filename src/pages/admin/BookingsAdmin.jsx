@@ -12,6 +12,7 @@ import {
   Button, Input, Select, Textarea, Badge, Alert, LoadingBlock, EmptyState, Spinner, cx,
 } from '../../components/ui/index.jsx';
 import { capFirst, displayPhone } from '../../components/booking/bookingHelpers.js';
+import { AddressRow, MapsLink, PinIcon } from '../../components/booking/ServiceAddress.jsx';
 
 /**
  * Gestión de reservas.
@@ -23,6 +24,11 @@ import { capFirst, displayPhone } from '../../components/booking/bookingHelpers.
  * El enlace de WhatsApp de cada clienta pasa por `whatsappLink`, que le
  * pone el +57 a los celulares guardados sin indicativo (las reservas
  * antiguas): sin eso wa.me abría un número de Grecia.
+ *
+ * Todo el servicio es a domicilio: la dirección (`serviceAddress`) va en
+ * cada reserva, a la vista y con su enlace a Google Maps. Las reservas
+ * antiguas o creadas desde el panel pueden no tenerla; entonces se avisa
+ * que hay que pedirla.
  */
 
 /** Precio guardado en la reserva, con el modo del servicio ("Desde…"). */
@@ -228,11 +234,17 @@ function BookingList({ items, settings, onSelect }) {
   return (
     <ul className="space-y-3">
       {items.map((booking) => (
-        <li key={booking.id}>
+        // La tarjeta es un <li> y no un botón entero: el enlace a Maps no
+        // puede ir dentro de un <button> (HTML inválido, y el lector de
+        // pantalla no lo anunciaría).
+        <li
+          key={booking.id}
+          className="rounded-2xl border border-line bg-surface shadow-soft transition hover:border-brand-200 hover:shadow-lift"
+        >
           <button
             type="button"
             onClick={() => onSelect(booking)}
-            className="flex w-full flex-wrap items-center gap-4 rounded-2xl border border-line bg-surface p-4 text-left shadow-soft transition hover:border-brand-200 hover:shadow-lift focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2"
+            className="flex w-full flex-wrap items-center gap-4 rounded-2xl p-4 pb-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2"
           >
             <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-blush text-brand-800">
               <span className="text-[10px] uppercase leading-none">
@@ -273,6 +285,7 @@ function BookingList({ items, settings, onSelect }) {
               </span>
             </div>
           </button>
+          <AddressRow address={booking.serviceAddress} className="border-t border-line/70 px-4 pb-1 pt-1 sm:pl-[5.5rem]" />
         </li>
       ))}
     </ul>
@@ -365,6 +378,13 @@ function WeekCalendar({ items, settings, onSelect }) {
                         </span>
                         <span className="block truncate">{booking.customerName}</span>
                         <span className="block truncate opacity-75">{booking.service.name}</span>
+                        {booking.serviceAddress && (
+                          <span className="mt-0.5 flex items-center gap-1 opacity-75">
+                            <PinIcon className="h-3 w-3" />
+                            {/* min-w-0: sin él, un hijo flex no se encoge y "truncate" no corta. */}
+                            <span className="min-w-0 truncate">{booking.serviceAddress}</span>
+                          </span>
+                        )}
                       </button>
                     </li>
                   ))}
@@ -466,6 +486,31 @@ function BookingDrawer({ booking, settings, onClose, onAct }) {
         </header>
 
         <div className="flex-1 overflow-y-auto p-5">
+          {/* Dónde es: sin estudio, es lo primero que Yury necesita para salir. */}
+          <div
+            className={cx(
+              'mb-5 rounded-2xl border p-4',
+              booking.serviceAddress ? 'border-brand-200 bg-brand-50' : 'border-dashed border-gold-300 bg-gold-100',
+            )}
+          >
+            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink-500">
+              <PinIcon className="h-4 w-4 text-brand-600" />
+              Lugar del servicio
+            </p>
+            {booking.serviceAddress ? (
+              <>
+                <p className="mt-1.5 whitespace-pre-line break-words text-base font-medium leading-snug text-ink-800">
+                  {booking.serviceAddress}
+                </p>
+                <MapsLink address={booking.serviceAddress}>Abrir en Google Maps</MapsLink>
+              </>
+            ) : (
+              <p className="mt-1.5 text-sm leading-relaxed text-ink-700">
+                Esta reserva no trae dirección. Pídesela a la clienta por WhatsApp antes de la cita.
+              </p>
+            )}
+          </div>
+
           <dl className="space-y-3 text-sm">
             {[
               ['Servicio', booking.service.name],

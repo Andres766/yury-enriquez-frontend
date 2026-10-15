@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Reveal, SectionTitle } from '../ui/index.jsx';
 import { useSettings } from '../../context/SettingsContext.jsx';
 import { whatsappLink } from '../../lib/format.js';
@@ -11,11 +12,24 @@ import { firstName } from './contactInfo.js';
  * Con <details>/<summary>: el navegador ya da el abrir y cerrar con
  * teclado, el estado expandido para el lector de pantalla y funciona
  * aunque falle el JavaScript. Las preguntas viven en src/data/faq.js.
+ *
+ * Las respuestas con cifras del panel (abono, domicilio, antelación) son
+ * funciones de los ajustes: publishedFaq las resuelve con los ajustes
+ * actuales, así que al cambiar el valor en Panel → Ajustes cambia aquí
+ * sin tocar este archivo.
+ *
+ * En el inicio se ven las primeras FIRST y el resto queda detrás de un
+ * botón: con todas abiertas a la vista, la portada volvía a ser larga.
  */
+const FIRST = 6;
+
 export default function FaqSection() {
   const settings = useSettings();
-  const items = publishedFaq(settings);
-  if (items.length === 0) return null;
+  const [showAll, setShowAll] = useState(false);
+  const all = publishedFaq(settings);
+  if (all.length === 0) return null;
+  const items = showAll ? all : all.slice(0, FIRST);
+  const hidden = all.length - items.length;
 
   const number = settings.whatsappNumber || settings.contactPhone;
 
@@ -45,6 +59,18 @@ export default function FaqSection() {
             </details>
           ))}
         </div>
+
+        {hidden > 0 && (
+          <div className="mt-5 text-center">
+            <button
+              type="button"
+              onClick={() => setShowAll(true)}
+              className="inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-5 text-sm font-medium text-ink-700 shadow-soft transition hover:border-brand-300 hover:bg-blush"
+            >
+              Ver las otras {hidden} preguntas
+            </button>
+          </div>
+        )}
 
         {number && (
           <p className="mt-6 text-center text-sm text-ink-500">

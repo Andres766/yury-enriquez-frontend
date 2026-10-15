@@ -39,6 +39,8 @@ const FALLBACK = {
   maxAdvanceDays: 90,
   slotIntervalMinutes: 30,
   bufferMinutes: 15,
+  /** Adicional del domicilio dentro de Pasto, en centavos; null = no se muestra. */
+  homeVisitFeeCents: null,
   /** true cuando ya respondió GET /api/settings (o falló). */
   loaded: false,
 };
@@ -114,9 +116,10 @@ export function SettingsProvider({ children }) {
   }, [settings.theme]);
 
   useEffect(() => {
-    // Igual que el <title> de index.html: «Maquilladora profesional en
-    // Pasto» es lo que la gente busca; el tagline en inglés no ayuda.
-    document.title = `${settings.brandName} · Maquilladora profesional en Pasto`;
+    // Igual que el <title> de index.html: «Maquilladora profesional a
+    // domicilio en Pasto» es lo que la gente busca (y dice de entrada que
+    // no hay estudio); el tagline en inglés no ayuda.
+    document.title = `${settings.brandName} · Maquilladora profesional a domicilio en Pasto`;
   }, [settings.brandName]);
 
   const value = useMemo(() => ({ ...settings, reload }), [settings, reload]);

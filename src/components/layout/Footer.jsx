@@ -108,7 +108,7 @@ export default function Footer() {
               ['/ocasiones', 'Para cada ocasión'],
               ['/reservar', 'Reservar mi cita'],
               ['/mi-reserva', 'Consultar mi reserva'],
-              ['/contacto', 'Contacto y ubicación'],
+              ['/contacto', 'Contacto'],
             ].map(([to, label]) => (
               <li key={to}>
                 <Link to={to} className={linkClass}>
@@ -188,6 +188,8 @@ export default function Footer() {
                 </a>
               </li>
             )}
+            {/* Sin dirección de local: atiende a domicilio. */}
+            <li className="pt-1 leading-relaxed text-ink-500">A domicilio en Pasto y municipios cercanos</li>
             {settings.businessHoursNote && (
               <li className="pt-1 leading-relaxed text-ink-500">{settings.businessHoursNote}</li>
             )}

@@ -34,8 +34,23 @@ export function isDateService(service, occasionSlug) {
   return slugs.length > 0 && slugs.every((slug) => DATE_OCCASIONS.has(slug));
 }
 
-/** Servicio de temporada (catrinas, Halloween): lleva su propio sello. */
-export const isSeasonalService = (service) => /catrina|halloween/i.test(service?.slug ?? '');
+/**
+ * Servicio de temporada: lleva su propio sello. Manda la temporada que
+ * Yury pone en el panel (Desde/Hasta); el slug queda de respaldo para
+ * catrinas y Halloween mientras no tengan fechas cargadas.
+ */
+export const isSeasonalService = (service) =>
+  Boolean(service?.availableFrom || service?.availableUntil) || /catrina|halloween/i.test(service?.slug ?? '');
+
+/**
+ * ¿Ya pasó la temporada de este servicio? `today` es "YYYY-MM-DD" en la
+ * zona del negocio; las fechas son inclusive, así que el último día
+ * todavía cuenta. Comparar textos ISO basta: tienen el mismo formato.
+ */
+export const seasonIsOver = (service, today) => Boolean(service?.availableUntil) && service.availableUntil < today;
+
+/** ¿La temporada aún no empieza? Se puede reservar desde ya para esos días. */
+export const seasonIsAhead = (service, today) => Boolean(service?.availableFrom) && service.availableFrom > today;
 
 // ── Enlaces con contexto ─────────────────────────────────────────────
 
@@ -195,6 +210,12 @@ export const testimonialsForOccasion = (slug) => OCCASION_TESTIMONIALS[slug] ?? 
  * sociales tienen los mismos servicios, así que van juntas con grados.
  * Una ocasión nueva que cree el panel sale en su propia sección, y lo
  * que no tenga ocasión va en "Otros servicios".
+ *
+ * Los talleres no son un maquillaje para un evento, sino clases: van
+ * siempre en su propia sección "Talleres" (por categoría, no por
+ * ocasión), aunque en el panel les hayan marcado alguna ocasión. Así
+ * quien busca "lo de grados" no se encuentra un taller entre los
+ * maquillajes.
  */
 export const MENU_SECTIONS = [
   { id: 'novias', label: 'Novias', occasions: ['bodas'] },
@@ -203,7 +224,13 @@ export const MENU_SECTIONS = [
   { id: 'sesiones', label: 'Sesiones de fotos', occasions: ['sesiones-de-fotos'] },
 ];
 
-export function groupMenu(services = [], occasions = []) {
+export const WORKSHOP_SECTION = { id: 'talleres', label: 'Talleres' };
+
+export const isWorkshop = (service) => service?.category === 'TALLER';
+
+export function groupMenu(allServices = [], occasions = []) {
+  const workshops = allServices.filter(isWorkshop);
+  const services = allServices.filter((s) => !isWorkshop(s));
   const known = new Set(MENU_SECTIONS.flatMap((section) => section.occasions));
   const extra = occasions
     .filter((o) => !known.has(o.slug))
@@ -215,6 +242,8 @@ export function groupMenu(services = [], occasions = []) {
     occasion: section.occasions.length === 1 ? occasions.find((o) => o.slug === section.occasions[0]) : null,
     services: services.filter((s) => s.occasions?.some((o) => section.occasions.includes(o.slug))),
   }));
+
+  if (workshops.length) sections.push({ ...WORKSHOP_SECTION, occasions: [], occasion: null, services: workshops });
 
   const orphans = services.filter((s) => !s.occasions?.length);
   if (orphans.length) sections.push({ id: 'otros', label: 'Otros servicios', occasions: [], services: orphans });

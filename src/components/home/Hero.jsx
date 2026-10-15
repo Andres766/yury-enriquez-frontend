@@ -12,7 +12,7 @@ import { firstName } from './contactInfo.js';
  * Portada.
  *
  * Mobile-first: en el celular va primero la foto, baja (unos 44svh), y
- * debajo quién es, qué hace y dónde, el titular y los botones. Así
+ * debajo quién es, qué hace y dónde (a domicilio, en Pasto), el titular y los botones. Así
  * quien llega desde Instagram ve el trabajo real en el primer pantallazo
  * y el botón de reservar no queda enterrado. A partir de `lg` pasa a dos
  * columnas, con la foto a la derecha.
@@ -75,8 +75,9 @@ export default function Hero() {
                 decoding="async"
               />
             ) : (
-              /* Foto real del estudio. WebP para quien lo soporte, JPG de
-                 respaldo; dos anchos para no bajar 1084 px en un celular. */
+              /* Foto real de Yury trabajando. WebP para quien lo soporte, JPG
+                 de respaldo; dos anchos para no bajar 1084 px en un celular.
+                 El texto alternativo no dice dónde: atiende a domicilio. */
               <picture>
                 <source
                   type="image/webp"
@@ -89,7 +90,7 @@ export default function Hero() {
                   sizes="(min-width: 1024px) 45vw, 90vw"
                   width="1084"
                   height="1451"
-                  alt="Yury Enríquez maquillando a una clienta en su estudio, frente al aro de luz"
+                  alt="Yury Enríquez maquillando a una clienta frente al aro de luz"
                   className="h-full w-full object-cover object-[50%_35%]"
                   fetchpriority="high"
                   decoding="async"
@@ -100,8 +101,8 @@ export default function Hero() {
         </motion.div>
 
         <div className="text-center lg:text-left">
-          <motion.p {...fadeUp(0.05)} className="eyebrow">
-            {settings.brandName} · Maquilladora profesional en Pasto
+          <motion.p {...fadeUp(0.05)} className="eyebrow text-balance">
+            {settings.brandName} · Maquilladora profesional a domicilio en Pasto
           </motion.p>
 
           <motion.h1
@@ -137,8 +138,8 @@ export default function Hero() {
             {...fadeUp(0.16)}
             className="text-pretty mx-auto mt-4 max-w-xl text-[15px] leading-relaxed text-ink-600 sm:mt-6 sm:text-lg lg:mx-0"
           >
-            Maquillaje y peinado para novias, quinceañeras, grados y sesiones de fotos. Reserva en
-            línea con los horarios que de verdad tengo libres.
+            Maquillaje y peinado a domicilio para novias, quinceañeras, grados y sesiones de fotos.
+            Reserva en línea con los horarios que de verdad tengo libres.
           </motion.p>
 
           <motion.div
@@ -171,7 +172,10 @@ export default function Hero() {
           </motion.div>
 
           <motion.p {...fadeUp(0.28)} className="mt-5 text-sm text-ink-500">
-            Sin crear cuenta · Pagas por transferencia o en efectivo
+            {/* Con abono en Ajustes, "pagas en efectivo" a secas lo contradiría. */}
+            {Number(settings.depositPercent) > 0
+              ? `Sin crear cuenta · Separas tu fecha con un abono del ${Number(settings.depositPercent)} %`
+              : 'Sin crear cuenta · Pagas por transferencia o en efectivo'}
             <span className="mx-2 text-ink-400" aria-hidden="true">
               ·
             </span>

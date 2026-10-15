@@ -5,7 +5,12 @@ import WhatsAppIcon from './WhatsAppIcon.jsx';
 import { firstName, formatCoPhone } from './contactInfo.js';
 
 /**
- * Contacto, ubicación y horario.
+ * Contacto y horario.
+ *
+ * Yury atiende 100 % a domicilio: no hay estudio al que llegar, así que
+ * en vez de una dirección se dice dónde atiende (Pasto y municipios
+ * cercanos). El bloque de ubicación y el mapa solo aparecen si algún día
+ * se llena `addressLine` en Ajustes; hoy está vacío y no se pinta.
  *
  * El horario se pinta desde las reglas reales de la agenda, así que si
  * la maquilladora cambia su disponibilidad en el panel, esta sección se
@@ -42,14 +47,14 @@ export default function ContactSection({ rules = null, loading = false, compact 
       {!compact && (
         <SectionTitle
           eyebrow="Contacto"
-          title="Dónde atiendo y cuándo"
-          subtitle="Atiendo únicamente con cita previa. Escríbeme si necesitas un horario que no aparece en el calendario."
+          title="Contacto y horario"
+          subtitle="Atiendo únicamente con cita previa y a domicilio. Escríbeme si necesitas un horario que no aparece en el calendario."
           className="mb-8 sm:mb-12"
           as="h2"
         />
       )}
       <span id="titulo-contacto" className="sr-only">
-        Contacto y ubicación
+        Contacto y horario
       </span>
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
@@ -58,6 +63,17 @@ export default function ContactSection({ rules = null, loading = false, compact 
             <h3 className="text-2xl">Escríbeme</h3>
             <p className="mt-2 text-sm leading-relaxed text-ink-500">
               Por WhatsApp te respondo más rápido. Si prefieres, también puedes llamar o enviar un correo.
+            </p>
+
+            {/* No es un enlace: no hay a dónde ir, es ella la que va. */}
+            <p className="mt-5 flex items-center gap-4 rounded-2xl bg-blush p-4 text-sm leading-snug text-ink-700">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface text-brand-600">
+                <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" aria-hidden="true">
+                  <path d="M3 9.2 10 3.5l7 5.7M5 7.7v8.8h10V7.7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M8.3 16.5v-4.2h3.4v4.2" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+                </svg>
+              </span>
+              <span className="min-w-0 flex-1">Atiendo 100 % a domicilio en Pasto y municipios cercanos.</span>
             </p>
 
             <ul className="mt-7 space-y-3">

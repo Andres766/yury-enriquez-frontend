@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, useReducedMotion } from 'framer-motion';
 import { api } from '../lib/api.js';
-import { duration, longDate, priceLabel, CATEGORY_LABEL } from '../lib/format.js';
+import { depositText, duration, longDate, priceLabel, seasonText, toDateISO, CATEGORY_LABEL } from '../lib/format.js';
 import {
   DATE_OCCASIONS,
   advanceDaysFor,
@@ -11,6 +11,8 @@ import {
   isDateService,
   isSeasonalService,
   photoProps,
+  seasonIsAhead,
+  seasonIsOver,
   visibleImages,
   waHref,
 } from '../lib/catalog.js';
@@ -20,7 +22,7 @@ import ServiceCard from '../components/ServiceCard.jsx';
 import MobileCtaBar, { useStickyCta } from '../components/catalog/MobileCtaBar.jsx';
 import Lightbox from '../components/catalog/Lightbox.jsx';
 import usePageTitle from '../components/catalog/usePageTitle.js';
-import { CheckIcon, StarPlaceholder, WhatsAppIcon } from '../components/catalog/icons.jsx';
+import { CalendarIcon, CheckIcon, StarPlaceholder, WhatsAppIcon } from '../components/catalog/icons.jsx';
 
 // Ocasiones en las que la clienta suele venir acompañada (mamá, damas,
 // compañeras de grado): ahí se ofrece escribir por el grupo.
@@ -149,7 +151,31 @@ export default function ServiceDetail() {
     ? waHref(settings, 'grupo', { service })
     : null;
 
+  /*
+   * Temporada (catrinas): solo se atiende esos días, pero el turno se
+   * puede separar antes. Se dice junto al precio para que nadie llegue
+   * al calendario buscando una fecha que no va a encontrar. El "hoy" es
+   * el del estudio, no el del navegador.
+   *
+   * "Ya puedes separar" solo si la temporada empieza dentro de la agenda
+   * en línea (maxAdvanceDays): si Yury carga en noviembre las fechas del
+   * año siguiente, el calendario aún no las muestra y la frase mentiría.
+   */
   const lastBookable = new Date(Date.now() + advanceDaysFor(service, settings) * 86_400_000);
+  const season = seasonText(service);
+  const today = toDateISO(new Date(), settings.timezone);
+  const seasonNote = !season
+    ? null
+    : seasonIsOver(service, today)
+      ? 'Las fechas de esta temporada ya pasaron.'
+      : seasonIsAhead(service, today)
+        ? service.availableFrom <= toDateISO(lastBookable, settings.timezone)
+          ? 'Ya puedes separar tu turno para esos días.'
+          : 'La agenda en línea para esas fechas abre más adelante.'
+        : null;
+
+  // Abono para separar la fecha, si Yury lo dejó en Ajustes.
+  const deposit = depositText(settings.depositPercent, service);
 
   const bar = waPrimary
     ? {
@@ -281,6 +307,15 @@ export default function ServiceDetail() {
               <p className="text-xs uppercase tracking-widest text-ink-400">Duración</p>
               <p className="mt-1 font-display text-3xl text-ink-800">{duration(service.durationMinutes)}</p>
             </div>
+            {season && (
+              <div className="w-full border-t border-line pt-4">
+                <p className="flex items-center gap-2 text-sm font-medium text-gold-700">
+                  <CalendarIcon className="h-4 w-4 shrink-0" />
+                  {season}
+                </p>
+                {seasonNote && <p className="mt-1 text-xs leading-relaxed text-ink-500">{seasonNote}</p>}
+              </div>
+            )}
             {price.isQuote && (
               <p className="w-full text-xs leading-relaxed text-ink-500">
                 El valor depende de lo que necesites: te lo confirmamos por WhatsApp antes de agendar.
@@ -329,6 +364,8 @@ export default function ServiceDetail() {
               </>
             )}
           </div>
+
+          {deposit && <p className="mt-3 text-sm leading-relaxed text-ink-600">{deposit}.</p>}
 
           {waPrimary && dateMode && !price.isQuote && (
             <p className="mt-3 text-xs leading-relaxed text-ink-500">

@@ -79,6 +79,7 @@ export const CATEGORY_LABEL = {
   MAQUILLAJE: 'Maquillaje',
   PEINADO: 'Peinado',
   PAQUETE: 'Paquete',
+  TALLER: 'Taller',
 };
 
 export const STATUS_LABEL = {
@@ -98,7 +99,7 @@ export const STATUS_TONE = {
 };
 
 export const PAYMENT_LABEL = {
-  TRANSFERENCIA: 'Transferencia',
+  TRANSFERENCIA: 'Nequi o Daviplata',
   EFECTIVO: 'Efectivo',
 };
 
@@ -157,3 +158,48 @@ export function priceLabel(service) {
   if (mode === 'FROM') return { mode, text: `Desde ${amount}`, short: `Desde ${amount}`, isQuote: false };
   return { mode, text: amount, short: amount, isQuote: false };
 }
+
+// ── Temporada y abono ────────────────────────────────────────────────
+
+/** "2026-10-22" → "22 de octubre" (a mediodía UTC para no cruzar de día). */
+function calendarDay(iso) {
+  return new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(
+    new Date(`${iso}T12:00:00Z`),
+  );
+}
+
+/**
+ * Texto de la temporada de un servicio, o null si se reserva todo el año.
+ * "Solo del 22 al 31 de octubre" · "Desde el 22 de octubre" · "Hasta el 31 de octubre".
+ */
+export function seasonText(service) {
+  const from = service?.availableFrom;
+  const until = service?.availableUntil;
+  if (from && until) {
+    const [a, b] = [calendarDay(from), calendarDay(until)];
+    // "del 22 al 31 de octubre" en vez de "del 22 de octubre al 31 de octubre"
+    const sameMonth = from.slice(0, 7) === until.slice(0, 7);
+    return `Solo del ${sameMonth ? a.split(' ')[0] : a} al ${b}`;
+  }
+  if (from) return `Desde el ${calendarDay(from)}`;
+  if (until) return `Hasta el ${calendarDay(until)}`;
+  return null;
+}
+
+/**
+ * Cómo se separa la fecha según el porcentaje de abono de Ajustes.
+ *   FIXED → "Separas tu fecha con un abono del 50 % ($45.000)"
+ *   FROM  → "Separas tu fecha con un abono del 50 % del valor final"
+ *   QUOTE → "Separas tu fecha con un abono del 50 % del valor acordado"
+ * Devuelve null si no hay política de abono (depositPercent vacío o 0).
+ */
+export function depositText(depositPercent, service) {
+  const pct = Number(depositPercent);
+  if (!pct || pct <= 0) return null;
+  const mode = service?.priceMode ?? 'FIXED';
+  if (mode === 'QUOTE') return `Separas tu fecha con un abono del ${pct} % del valor acordado`;
+  if (mode === 'FROM') return `Separas tu fecha con un abono del ${pct} % del valor final`;
+  const amount = money(Math.round(((service?.priceCents ?? 0) * pct) / 100), service?.currency);
+  return `Separas tu fecha con un abono del ${pct} % (${amount})`;
+}
+

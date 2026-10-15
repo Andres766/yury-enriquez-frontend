@@ -5,7 +5,7 @@
  * reserva, el botón flotante de WhatsApp y el panel. Nada de esto toca
  * la API: son reglas de presentación y del navegador.
  */
-import { normalizeCoPhone } from '../../lib/format.js';
+import { money, normalizeCoPhone, seasonText } from '../../lib/format.js';
 
 // ── Textos ───────────────────────────────────────────────────────────
 
@@ -39,15 +39,50 @@ export function businessWhatsapp(settings) {
 // ── Servicios que necesitan conversación ─────────────────────────────
 
 /**
- * Servicios de novia.
+ * Servicios de novia, y el paquete de novios.
  *
  * No hay un campo para esto en el catálogo, así que se deduce del slug,
- * que sale del nombre ("maquillaje-de-novia", "paquete-novia-…"). Si
- * algún día se renombra, el peor caso es que el servicio vuelva al flujo
- * normal del calendario, que sigue funcionando.
+ * que sale del nombre ("maquillaje-de-novia", "paquete-novia-…",
+ * "bienestar-integrativo-para-novios"). El de novios entra aquí porque
+ * también se arma conversando (de 5 a 10 sesiones en pareja) y no se
+ * puede meter tal cual en el calendario. Si algún día se renombra, el
+ * peor caso es que el servicio vuelva al flujo normal del calendario,
+ * que sigue funcionando.
  */
 export function isBridalService(service) {
-  return /(^|-)novias?(-|$)/.test(service?.slug ?? '');
+  return /(^|-)novi(a|as|o|os)(-|$)/.test(service?.slug ?? '');
+}
+
+/**
+ * El paquete de novios no es maquillaje: son sesiones en pareja con la
+ * psicóloga. No se les pregunta «¿Dónde te maquillo?» ni se les suma el
+ * adicional del domicilio, que es del servicio de maquillaje (Yury no
+ * dijo que aplique a las sesiones).
+ */
+export function isCouplesProgram(service) {
+  return /(^|-)novios(-|$)/.test(service?.slug ?? '');
+}
+
+/** Pregunta del campo de dirección según el servicio. */
+export function addressLabel(service) {
+  if (isCouplesProgram(service)) return '¿Dónde hacemos las sesiones?';
+  if (service?.category === 'TALLER') return '¿Dónde hacemos el taller?';
+  return '¿Dónde te maquillo?';
+}
+
+/** ¿Se le muestra el adicional del domicilio a este servicio? */
+export function chargesHomeVisit(service) {
+  return !isCouplesProgram(service);
+}
+
+/** El paquete de novios (acompañamiento psicológico en pareja), no un maquillaje. */
+export function isCouplesService(service) {
+  return /(^|-)novios(-|$)/.test(service?.slug ?? '');
+}
+
+/** Paquetes de quinceañera ("paquete-quinceanera"). */
+export function isQuinceService(service) {
+  return /(^|-)quincea/.test(service?.slug ?? '');
 }
 
 /**
@@ -57,6 +92,149 @@ export function isBridalService(service) {
  */
 export function needsConversation(service) {
   return Boolean(service) && (service.priceMode === 'QUOTE' || isBridalService(service));
+}
+
+// ── Madrugadas ───────────────────────────────────────────────────────
+
+/** Ocasiones cuyos turnos de madrugada se cuadran por WhatsApp. */
+const EARLY_OCCASIONS = new Set(['bodas', 'quinceaneros', 'grados']);
+
+/**
+ * ¿Es un caso de madrugada (desde las 4:00 a. m.)?
+ *
+ * Yury atiende las madrugadas de grados, bodas y quinceañeras SOLO por
+ * WhatsApp y con mínimo 20 días de anticipación: esos turnos no salen en
+ * la agenda en línea. Se avisa con los paquetes de novia y quinceañera,
+ * o cuando la ocasión elegida es una de esas tres. El paquete de novios
+ * queda fuera: son sesiones de acompañamiento, no un maquillaje para la
+ * ceremonia.
+ */
+export function isEarlyMorningCase(service, occasion) {
+  if (isCouplesService(service)) return false;
+  return isBridalService(service) || isQuinceService(service) || EARLY_OCCASIONS.has(occasion?.slug ?? '');
+}
+
+// ── Domicilio ────────────────────────────────────────────────────────
+
+export const ADDRESS_MIN = 5;
+export const ADDRESS_MAX = 200;
+
+/**
+ * El servicio es 100 % a domicilio: sin dirección Yury no sabe a dónde
+ * ir. Mismos límites que la API (5 a 200 caracteres). null si está bien
+ * o si aún está vacío (el vacío lo frena el botón, no un error en rojo).
+ */
+export function addressError(raw) {
+  const value = String(raw ?? '').trim();
+  if (!value) return null;
+  if (value.length < ADDRESS_MIN) return 'Escribe la dirección completa, con el barrio y la ciudad o municipio.';
+  if (value.length > ADDRESS_MAX) return `La dirección puede tener hasta ${ADDRESS_MAX} caracteres.`;
+  return null;
+}
+
+/** ¿La dirección ya sirve para seguir? */
+export function addressReady(raw) {
+  const value = String(raw ?? '').trim();
+  return value.length >= ADDRESS_MIN && value.length <= ADDRESS_MAX;
+}
+
+/**
+ * Valor del adicional del domicilio dentro de Pasto ("$21.000"), o null
+ * si en Ajustes está vacío. Un 0 explícito también cuenta como "no se
+ * cobra": no tiene sentido anunciar "un adicional de $0".
+ */
+export function homeVisitFee(settings) {
+  const cents = settings?.homeVisitFeeCents;
+  return Number.isInteger(cents) && cents > 0 ? money(cents) : null;
+}
+
+/**
+ * La pista bajo el campo de dirección. Sin valor en Ajustes se omite la
+ * primera frase: no se inventa una tarifa.
+ */
+export function homeVisitHint(settings) {
+  const fee = homeVisitFee(settings);
+  const outside = 'Fuera de la ciudad se calcula según el transporte (taxi o InDrive).';
+  return fee ? `Dentro de Pasto el domicilio tiene un adicional de ${fee}. ${outside}` : outside;
+}
+
+/** Junto al precio: "+ domicilio $21.000 dentro de Pasto". No toca el precio guardado. */
+export function homeVisitShort(settings) {
+  const fee = homeVisitFee(settings);
+  return fee ? `+ domicilio ${fee} dentro de Pasto` : null;
+}
+
+/**
+ * Búsqueda en Google Maps de una dirección escrita por la clienta. Va
+ * con encodeURIComponent porque el texto es libre (#, &, tildes…): sin
+ * eso, "Cra 5 # 10-20" cortaría la búsqueda en el "#".
+ */
+export function mapsSearchUrl(address) {
+  const value = String(address ?? '').trim();
+  if (!value) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(value)}`;
+}
+
+// ── Temporada del servicio ───────────────────────────────────────────
+
+/**
+ * Temporada de un servicio como `{ from, until }` (fechas 'YYYY-MM-DD',
+ * ambas incluidas), o null si se reserva todo el año. Acepta tanto el
+ * servicio del catálogo como el `season` que devuelve /availability/month.
+ */
+export function serviceSeason(service) {
+  const from = service?.availableFrom ?? service?.from ?? null;
+  const until = service?.availableUntil ?? service?.until ?? null;
+  return from || until ? { from, until } : null;
+}
+
+/** ¿Ese día cae dentro de la temporada? Sin temporada, siempre sí. */
+export function inSeason(season, dateISO) {
+  if (!season || !dateISO) return true;
+  if (season.from && dateISO < season.from) return false;
+  if (season.until && dateISO > season.until) return false;
+  return true;
+}
+
+/**
+ * ¿Ya terminó la temporada? Un servicio de Catrinas que siga activo en
+ * noviembre no puede ofrecerse: todo su calendario saldría cerrado.
+ */
+export function seasonOver(service, todayISO) {
+  const until = serviceSeason(service)?.until;
+  return Boolean(until) && until < todayISO;
+}
+
+/**
+ * La frase de una línea para el calendario:
+ * "Este servicio solo se reserva del 22 al 31 de octubre."
+ * "Este servicio se reserva desde el 22 de octubre."
+ */
+export function seasonSentence(season) {
+  const text = season ? seasonText({ availableFrom: season.from, availableUntil: season.until }) : null;
+  if (!text) return null;
+  if (text.startsWith('Solo ')) return `Este servicio solo se reserva ${text.slice(5)}.`;
+  return `Este servicio se reserva ${text.charAt(0).toLowerCase()}${text.slice(1)}.`;
+}
+
+// ── Abono ────────────────────────────────────────────────────────────
+
+/**
+ * El abono en datos sueltos, para filas y mensajes cortos (la frase
+ * completa la da `depositText` de lib/format.js). Con precio fijo se
+ * calcula el valor; con "desde" o "a cotizar" no se puede, porque el
+ * valor final lo confirma Yury. null si no hay política de abono.
+ */
+export function depositInfo(depositPercent, service) {
+  const pct = Number(depositPercent);
+  if (!pct || pct <= 0) return null;
+  const mode = service?.priceMode ?? 'FIXED';
+  const amount =
+    mode === 'FIXED' ? money(Math.round(((service?.priceCents ?? 0) * pct) / 100), service?.currency) : null;
+  const short = amount
+    ? `${pct} % · ${amount}`
+    : `${pct} % del valor ${mode === 'QUOTE' ? 'acordado' : 'final'}`;
+  return { pct, amount, short };
 }
 
 // ── Celular ──────────────────────────────────────────────────────────

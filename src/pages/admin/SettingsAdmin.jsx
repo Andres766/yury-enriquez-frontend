@@ -4,6 +4,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { Button, Input, Textarea, Select, LoadingBlock, Alert } from '../../components/ui/index.jsx';
 import ThemePicker from '../../components/admin/ThemePicker.jsx';
 import { applyTheme, useSettings } from '../../context/SettingsContext.jsx';
+import { depositText, money } from '../../lib/format.js';
 
 /**
  * Ajustes del negocio.
@@ -13,16 +14,20 @@ import { applyTheme, useSettings } from '../../context/SettingsContext.jsx';
  * fidelidad. Lo que NO está aquí, a propósito, son los secretos
  * (credenciales SMTP, claves de firma): esos solo viven en variables de
  * entorno del servidor y nunca se exponen a una interfaz web.
+ *
+ * Yury atiende solo a domicilio: la dirección del negocio queda como
+ * opcional y el adicional del domicilio se escribe aquí en PESOS (como
+ * lo piensa ella), aunque la API lo guarde en centavos.
  */
 
 const GROUPS = [
   {
     title: 'Marca',
-    hint: 'Cómo se presenta el estudio en la web y en los correos.',
+    hint: 'Cómo te presentas en la web y en los correos.',
     fields: [
-      { key: 'brandName', label: 'Nombre del estudio', required: true },
+      { key: 'brandName', label: 'Nombre de la marca', required: true },
       { key: 'tagline', label: 'Frase corta', hint: 'Aparece bajo el nombre en la cabecera.' },
-      { key: 'aboutText', label: 'Sobre el estudio', type: 'textarea', rows: 6 },
+      { key: 'aboutText', label: 'Sobre mí', type: 'textarea', rows: 6 },
     ],
   },
   {
@@ -33,8 +38,12 @@ const GROUPS = [
       { key: 'whatsappNumber', label: 'Número de WhatsApp', type: 'tel', hint: 'Solo dígitos con indicativo: 573001234567' },
       { key: 'contactEmail', label: 'Correo público', type: 'email' },
       { key: 'ownerNotificationEmail', label: 'Correo para avisos de reservas', type: 'email', hint: 'Aquí llegan las notificaciones de cada reserva nueva.' },
-      { key: 'addressLine', label: 'Dirección' },
-      { key: 'mapUrl', label: 'Enlace a Google Maps', type: 'url' },
+      {
+        key: 'addressLine',
+        label: 'Dirección del negocio (opcional — déjala vacía si atiendes solo a domicilio)',
+        hint: 'No se usa como lugar de las citas: cada clienta escribe dónde la maquillas.',
+      },
+      { key: 'mapUrl', label: 'Enlace a Google Maps del negocio (opcional)', type: 'url' },
       { key: 'businessHoursNote', label: 'Resumen del horario', hint: 'Texto libre, además del horario real de la agenda.' },
     ],
   },
@@ -58,6 +67,45 @@ const GROUPS = [
         rows: 5,
         hint: 'Se incluyen en el correo de quien elige pagar por transferencia.',
       },
+      {
+        key: 'depositPercent',
+        label: 'Abono para separar la fecha (%)',
+        type: 'number',
+        min: 0,
+        max: 100,
+        inputMode: 'numeric',
+        placeholder: 'Sin abono',
+        // La pista muestra la frase tal como la verá la clienta en la
+        // ficha de cada servicio y en los correos de reserva.
+        hint: (form) => {
+          const example = depositText(form.depositPercent, { priceMode: 'FROM' });
+          return example
+            ? `En cada servicio se verá «${example}» (con el valor exacto si el precio es fijo). También va en los correos de reserva.`
+            : 'Vacío = no se menciona ningún abono en la web ni en los correos. Escribe 50 para pedir la mitad.';
+        },
+      },
+    ],
+  },
+  {
+    title: 'Domicilio',
+    hint: 'Todas las citas son en el lugar que indica la clienta al reservar.',
+    fields: [
+      {
+        // Campo del formulario en pesos; al guardar viaja como homeVisitFeeCents.
+        key: 'homeVisitFee',
+        errorKey: 'homeVisitFeeCents',
+        label: 'Adicional del domicilio dentro de Pasto ($)',
+        inputMode: 'numeric',
+        placeholder: 'Sin adicional',
+        // Solo dígitos: "21.000" o "$21000" quedan como 21000.
+        sanitize: (value) => value.replace(/\D/g, '').slice(0, 9),
+        hint: (form) => {
+          const pesos = form.homeVisitFee;
+          return pesos
+            ? `En la reserva se verá «Dentro de Pasto el domicilio tiene un adicional de ${money(Number(pesos) * 100)}». No se suma al precio del servicio. Fuera de la ciudad se dice que se calcula según el transporte.`
+            : 'Vacío = no se menciona ningún valor; solo que fuera de la ciudad se calcula según el transporte. Escribe el valor en pesos, por ejemplo 21000.';
+        },
+      },
     ],
   },
   {
@@ -66,7 +114,7 @@ const GROUPS = [
     fields: [
       { key: 'timezone', label: 'Zona horaria', hint: 'Formato IANA: America/Bogota' },
       { key: 'slotIntervalMinutes', label: 'Intervalo entre turnos (min)', type: 'number', min: 5, max: 240 },
-      { key: 'bufferMinutes', label: 'Margen entre citas (min)', type: 'number', min: 0, max: 240, hint: 'Tiempo para limpiar y preparar.' },
+      { key: 'bufferMinutes', label: 'Margen entre citas (min)', type: 'number', min: 0, max: 240, hint: 'Tiempo para recoger, desplazarte a la siguiente clienta y preparar.' },
       { key: 'minNoticeHours', label: 'Antelación mínima (horas)', type: 'number', min: 0, max: 720 },
       { key: 'maxAdvanceDays', label: 'Reservar con hasta (días)', type: 'number', min: 1, max: 365 },
     ],
@@ -127,6 +175,21 @@ function seasonalSummary(form) {
   return { tone: 'warning', text: `La temporada terminó el ${longDate(end)}. Cambia las fechas para programar la siguiente.` };
 }
 
+/**
+ * Lo que llega de la API, listo para el formulario: fechas de temporada
+ * vacías en vez de null y el adicional del domicilio pasado a pesos.
+ */
+function toForm(settings) {
+  const { homeVisitFeeCents, ...rest } = settings;
+  return {
+    ...rest,
+    seasonalTheme: settings.seasonalTheme ?? '',
+    seasonalStartDate: settings.seasonalStartDate ?? '',
+    seasonalEndDate: settings.seasonalEndDate ?? '',
+    homeVisitFee: Number.isInteger(homeVisitFeeCents) ? String(Math.round(homeVisitFeeCents / 100)) : '',
+  };
+}
+
 export default function SettingsAdmin() {
   const toast = useToast();
   const { reload: reloadSiteSettings } = useSettings();
@@ -155,21 +218,17 @@ export default function SettingsAdmin() {
     api
       .get('/settings/admin')
       .then((d) => {
-        setForm({
-          ...d.settings,
-          seasonalTheme: d.settings.seasonalTheme ?? '',
-          seasonalStartDate: d.settings.seasonalStartDate ?? '',
-          seasonalEndDate: d.settings.seasonalEndDate ?? '',
-        });
+        setForm(toForm(d.settings));
         // Lo que ve la web hoy (puede ser el de temporada), no el base
         savedTheme.current = d.settings.effectiveTheme ?? d.settings.theme;
       })
       .catch((error) => toast.error(error.message));
   }, [toast]);
 
-  const set = (key) => (event) => {
-    setForm((f) => ({ ...f, [key]: event.target.value }));
-    setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e));
+  const set = (key, sanitize, errorKey = key) => (event) => {
+    const value = sanitize ? sanitize(event.target.value) : event.target.value;
+    setForm((f) => ({ ...f, [key]: value }));
+    setErrors((e) => (e[errorKey] ? { ...e, [errorKey]: undefined } : e));
   };
 
   async function submit(event) {
@@ -179,22 +238,24 @@ export default function SettingsAdmin() {
 
     // Solo se envían los campos editables: id y updatedAt los gestiona
     // la base de datos.
-    const { id, updatedAt, effectiveTheme, seasonalActive, seasonalUpcoming, ...payload } = form;
+    const { id, updatedAt, effectiveTheme, seasonalActive, seasonalUpcoming, homeVisitFee, ...payload } = form;
     for (const key of ['slotIntervalMinutes', 'bufferMinutes', 'minNoticeHours', 'maxAdvanceDays', 'stampsRequired']) {
       payload[key] = Number(payload[key]);
     }
+    // El abono es opcional: vacío viaja como null (sin política de abono),
+    // no como 0, que Number('') daría y se leería como "abono del 0 %".
+    payload.depositPercent =
+      payload.depositPercent === '' || payload.depositPercent == null ? null : Number(payload.depositPercent);
+    // Pesos → centavos. Vacío = null (no se muestra ningún valor), igual
+    // que el abono: un 0 escrito sí se respeta.
+    payload.homeVisitFeeCents = homeVisitFee === '' || homeVisitFee == null ? null : Number(homeVisitFee) * 100;
     for (const key of ['instagramUrl', 'tiktokUrl', 'facebookUrl', 'mapUrl']) {
       payload[key] = payload[key] ?? '';
     }
 
     try {
       const { settings } = await api.patch('/settings/admin', payload);
-      setForm({
-        ...settings,
-        seasonalTheme: settings.seasonalTheme ?? '',
-        seasonalStartDate: settings.seasonalStartDate ?? '',
-        seasonalEndDate: settings.seasonalEndDate ?? '',
-      });
+      setForm(toForm(settings));
       savedTheme.current = settings.effectiveTheme ?? settings.theme;
       applyTheme(savedTheme.current);
       // La web pública de esta misma pestaña (decoración de temporada,
@@ -316,7 +377,7 @@ export default function SettingsAdmin() {
             <div className="grid gap-4 sm:grid-cols-2">
               {group.fields.map((field) => {
                 const Component = field.type === 'textarea' ? Textarea : Input;
-                const isWide = field.type === 'textarea' || ['addressLine', 'businessHoursNote', 'rewardDescription'].includes(field.key);
+                const isWide = field.type === 'textarea' || ['addressLine', 'businessHoursNote', 'rewardDescription', 'homeVisitFee'].includes(field.key);
 
                 return (
                   <Component
@@ -327,10 +388,12 @@ export default function SettingsAdmin() {
                     rows={field.rows}
                     min={field.min}
                     max={field.max}
-                    hint={field.hint}
-                    error={errors[field.key]}
+                    inputMode={field.inputMode}
+                    placeholder={field.placeholder}
+                    hint={typeof field.hint === 'function' ? field.hint(form) : field.hint}
+                    error={errors[field.errorKey ?? field.key]}
                     value={form[field.key] ?? ''}
-                    onChange={set(field.key)}
+                    onChange={set(field.key, field.sanitize, field.errorKey)}
                     className={isWide ? 'sm:col-span-2' : undefined}
                   />
                 );

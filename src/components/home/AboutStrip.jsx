@@ -12,19 +12,44 @@ import { instagramHandle } from './contactInfo.js';
  * Yury es la de la portada, trabajando. Aquí se usa recortada sobre ella
  * (no sobre la clienta), que es mejor que una foto de relleno. Cuando
  * haya retrato, basta con cambiar las rutas de abajo.
+ *
+ * Texto: si la primera línea va entre comillas (“…” o "…"), es su frase
+ * de cabecera y se pinta como cita destacada; el resto se parte en
+ * párrafos por las líneas en blanco. Sin esa frase se pinta tal cual,
+ * como siempre. Lo que diga de su formación y experiencia sale de ese
+ * mismo texto: aquí no se escribe ninguna cifra.
  */
+
+// Una línea entera entre comillas tipográficas, rectas o angulares.
+const QUOTE_LINE = /^\s*([“"«])([^\n]+?)([”"»])\s*$/;
+
+/** { quote, paragraphs } si el texto abre con una cita; si no, null. */
+function splitAbout(text) {
+  const value = String(text ?? '').replace(/\r\n?/g, '\n').trim();
+  const [firstLine, ...rest] = value.split('\n');
+  const match = firstLine?.match(QUOTE_LINE);
+  if (!match) return null;
+  const paragraphs = rest
+    .join('\n')
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return { quote: match[2].trim(), paragraphs };
+}
 
 const PORTRAIT = {
   webp: '/img/hero-yury-640.webp 640w, /img/hero-yury-1084.webp 1084w',
   jpg: '/img/hero-yury-640.jpg 640w, /img/hero-yury-1084.jpg 1084w',
   src: '/img/hero-yury-1084.jpg',
-  alt: 'Yury Enríquez en su estudio, con el pincel en la mano',
+  // Sin «en su estudio»: atiende a domicilio y no tiene local.
+  alt: 'Yury Enríquez con el pincel en la mano',
   focus: '30% 28%',
 };
 
 export default function AboutStrip() {
   const settings = useSettings();
   const handle = instagramHandle(settings.instagramUrl);
+  const about = splitAbout(settings.aboutText);
 
   return (
     <section className="container-page py-14 sm:py-20" aria-labelledby="sobre-mi">
@@ -35,10 +60,28 @@ export default function AboutStrip() {
             Hola, soy Yury
           </h2>
 
-          {settings.aboutText && (
-            <p className="text-pretty mt-5 whitespace-pre-line text-[15px] leading-relaxed text-ink-600 sm:text-base">
-              {settings.aboutText}
-            </p>
+          {about ? (
+            <>
+              <blockquote className="mt-5 border-l-2 border-brand-300 pl-4 sm:pl-5">
+                <p className="text-balance font-display text-2xl italic leading-snug text-brand-700 sm:text-[1.75rem]">
+                  “{about.quote}”
+                </p>
+              </blockquote>
+              {about.paragraphs.map((paragraph, i) => (
+                <p
+                  key={i}
+                  className="text-pretty mt-4 whitespace-pre-line text-[15px] leading-relaxed text-ink-600 sm:text-base"
+                >
+                  {paragraph}
+                </p>
+              ))}
+            </>
+          ) : (
+            settings.aboutText && (
+              <p className="text-pretty mt-5 whitespace-pre-line text-[15px] leading-relaxed text-ink-600 sm:text-base">
+                {settings.aboutText}
+              </p>
+            )
           )}
 
           {settings.instagramUrl && (

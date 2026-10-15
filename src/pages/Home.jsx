@@ -4,6 +4,7 @@ import { api } from '../lib/api.js';
 import Hero from '../components/home/Hero.jsx';
 import SeasonalSpotlight from '../components/home/SeasonalSpotlight.jsx';
 import PortfolioPreview from '../components/home/PortfolioPreview.jsx';
+import HomeVisitSection from '../components/home/HomeVisitSection.jsx';
 import PromoStrip from '../components/home/PromoStrip.jsx';
 import AboutStrip from '../components/home/AboutStrip.jsx';
 import Testimonials from '../components/home/Testimonials.jsx';
@@ -16,9 +17,11 @@ import { SectionTitle, Button, Reveal } from '../components/ui/index.jsx';
  * Inicio.
  *
  * Orden pensado para el celular, donde llega casi todo el mundo desde
- * Instagram: portada → trabajos reales → servicios destacados → quién es
- * Yury → testimonios → preguntas → cierre con los dos botones. Unas 8 a
- * 10 pantallas en vez de 18. La grilla de ocasiones, el paso a paso y el
+ * Instagram: portada → trabajos reales → a domicilio → servicios
+ * destacados → quién es Yury → testimonios → preguntas → cierre con los
+ * dos botones. Unas 8 a 10 pantallas en vez de 18. «A domicilio» va antes
+ * de los servicios porque Yury no tiene estudio: quien reserva tiene que
+ * saber desde el principio que es ella la que va a su casa. La grilla de ocasiones, el paso a paso y el
  * horario completo viven en sus páginas (/ocasiones, preguntas
  * frecuentes y /contacto).
  *
@@ -102,6 +105,7 @@ export default function Home() {
       <Hero />
       <SeasonalSpotlight />
       <PortfolioPreview />
+      <HomeVisitSection />
 
       <section className="border-y border-line bg-surface py-14 sm:py-20" aria-labelledby="titulo-servicios">
         <div className="container-page">

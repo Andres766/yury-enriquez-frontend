@@ -5,6 +5,14 @@ import ClosingCTA from '../components/home/ClosingCTA.jsx';
 import { SectionTitle, Reveal } from '../components/ui/index.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 
+/**
+ * Contacto.
+ *
+ * Yury atiende a domicilio: la página habla de cómo escribirle y cuándo
+ * atiende, no de cómo llegar. El mapa solo sale si en Ajustes hay una
+ * dirección (`addressLine`) además del enlace: sin ella, la tarjeta del
+ * mapa quedaba con un título vacío.
+ */
 export default function Contact() {
   const settings = useSettings();
   // null mientras no se sabe: con el servidor dormido la respuesta tarda,
@@ -37,7 +45,7 @@ export default function Contact() {
           <SectionTitle
             eyebrow="Contacto"
             title="Hablemos de tu cita"
-            subtitle="Escríbeme por WhatsApp y resolvemos tus dudas. Si ya sabes qué quieres, puedes reservar directamente en línea."
+            subtitle="Voy hasta donde estés, en Pasto y municipios cercanos. Escríbeme por WhatsApp y resolvemos tus dudas; si ya sabes qué quieres, reserva en línea y me dejas la dirección."
             as="h1"
           />
         </div>
@@ -45,7 +53,7 @@ export default function Contact() {
 
       <ContactSection rules={rules} loading={rulesLoading} compact />
 
-      {settings.mapUrl && (
+      {settings.addressLine && settings.mapUrl && (
         <Reveal className="container-page pb-16">
           <div className="overflow-hidden rounded-[2rem] border border-line shadow-soft">
             <a

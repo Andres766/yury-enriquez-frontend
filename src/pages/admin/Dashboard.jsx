@@ -5,6 +5,13 @@ import { api } from '../../lib/api.js';
 import { useSettings } from '../../context/SettingsContext.jsx';
 import { money, longDate, time, STATUS_LABEL, STATUS_TONE, whatsappLink } from '../../lib/format.js';
 import { LoadingBlock, Button, EmptyState, cx } from '../../components/ui/index.jsx';
+import { AddressRow } from '../../components/booking/ServiceAddress.jsx';
+
+/*
+ * En "Próximas citas" va la dirección de cada una con su enlace a Maps:
+ * todo es a domicilio, y lo que Yury necesita al mirar el día es a qué
+ * hora y a dónde tiene que salir.
+ */
 
 export default function Dashboard() {
   const settings = useSettings();
@@ -161,6 +168,8 @@ export default function Dashboard() {
                     </Link>
                   </div>
                 </div>
+
+                <AddressRow address={booking.serviceAddress} className="w-full border-t border-line/70 pt-1" />
               </li>
             ))}
           </ul>

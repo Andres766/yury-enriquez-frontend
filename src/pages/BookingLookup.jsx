@@ -3,10 +3,19 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { api, ApiError } from '../lib/api.js';
 import { useSettings } from '../context/SettingsContext.jsx';
-import { longDate, time, duration, STATUS_LABEL, STATUS_TONE, PAYMENT_LABEL, priceLabel } from '../lib/format.js';
+import {
+  longDate,
+  time,
+  duration,
+  STATUS_LABEL,
+  STATUS_TONE,
+  PAYMENT_LABEL,
+  priceLabel,
+  depositText,
+} from '../lib/format.js';
 import { Button, Input, SectionTitle, Alert, cx } from '../components/ui/index.jsx';
 import { WhatsAppButtonLink } from '../components/booking/WhatsAppAction.jsx';
-import { capFirst, ownerFirstName } from '../components/booking/bookingHelpers.js';
+import { capFirst, ownerFirstName, depositInfo } from '../components/booking/bookingHelpers.js';
 
 /**
  * Consulta de reserva para invitadas.
@@ -18,6 +27,13 @@ import { capFirst, ownerFirstName } from '../components/booking/bookingHelpers.j
  * Mientras una reserva por transferencia siga pendiente, aquí se
  * repiten los datos de pago y el botón para mandar el comprobante:
  * muchas clientas vuelven a esta página justo para eso.
+ *
+ * Con abono en Ajustes (`depositPercent`), cualquier reserva pendiente
+ * lo muestra, sea por transferencia o en efectivo: la fecha se separa
+ * con el abono y el resto se paga como se haya elegido.
+ *
+ * El servicio es a domicilio, así que se repite la dirección que dejó
+ * la clienta (`serviceAddress`): es lo primero que querrá revisar.
  */
 export default function BookingLookup() {
   const [searchParams] = useSearchParams();
@@ -59,10 +75,20 @@ export default function BookingLookup() {
     ? new Date(new Date(booking.startAt).getTime() + booking.service.durationMinutes * 60_000)
     : null;
   const first = ownerFirstName(settings);
-  const awaitingTransfer = booking?.status === 'PENDING' && booking.paymentMethod === 'TRANSFERENCIA';
-  const price = booking
-    ? priceLabel({ ...booking.service, priceCents: booking.priceCents, currency: booking.currency })
-    : null;
+  const priced = booking ? { ...booking.service, priceCents: booking.priceCents, currency: booking.currency } : null;
+  const price = priced ? priceLabel(priced) : null;
+  const pending = booking?.status === 'PENDING';
+  const deposit = pending ? depositText(settings.depositPercent, priced) : null;
+  const depositData = pending ? depositInfo(settings.depositPercent, priced) : null;
+  const awaitingPayment = pending && (booking.paymentMethod === 'TRANSFERENCIA' || Boolean(deposit));
+  const when = booking
+    ? `${booking.service.name}, ${longDate(booking.startAt, settings.timezone)} a las ${time(booking.startAt, settings.timezone)}`
+    : '';
+  const proofMessage = depositData
+    ? depositData.amount
+      ? `Hola ${first}, te envío el comprobante del abono (${depositData.short}) de mi reserva ${booking.code} (${when}).`
+      : `Hola ${first}, ¿me confirmas el valor del abono del ${depositData.pct} % de mi reserva ${booking.code} (${when})?`
+    : `Hola ${first}, te envío el comprobante de mi reserva ${booking?.code} (${when}).`;
 
   return (
     <div className="container-page py-14 sm:py-20">
@@ -138,8 +164,10 @@ export default function BookingLookup() {
                 ['Ocasión', booking.occasion?.name],
                 ['Fecha', capFirst(longDate(booking.startAt, settings.timezone))],
                 ['Hora', `${time(booking.startAt, settings.timezone)} – ${time(serviceEnd, settings.timezone)}`],
+                ['Te maquillo en', booking.serviceAddress],
                 ['Medio de pago', PAYMENT_LABEL[booking.paymentMethod]],
                 [price.mode === 'FROM' ? 'Valor estimado' : 'Valor', price.text],
+                ['Abono para separar', depositData?.short],
                 ['A nombre de', booking.customerName],
                 ['Notas', booking.notes],
               ]
@@ -152,12 +180,17 @@ export default function BookingLookup() {
                 ))}
             </dl>
 
-            {awaitingTransfer && (
+            {awaitingPayment && (
               <div className="border-t border-line px-6 py-5">
+                {deposit && (
+                  <p className="mb-4 text-sm leading-relaxed text-ink-600">
+                    {deposit}. Tu reserva queda en firme cuando {first} lo recibe.
+                  </p>
+                )}
                 {settings.transferInstructions && (
                   <div className="mb-4 rounded-2xl bg-blush p-4">
                     <p className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-brand-700">
-                      Datos para la transferencia
+                      {deposit ? 'Datos para el abono' : 'Datos para la transferencia'}
                     </p>
                     <p className="whitespace-pre-line text-sm leading-relaxed text-ink-600">
                       {settings.transferInstructions}
@@ -167,9 +200,9 @@ export default function BookingLookup() {
                 <WhatsAppButtonLink
                   variant="primary"
                   className="w-full"
-                  message={`Hola ${first}, te envío el comprobante de mi reserva ${booking.code} (${booking.service.name}, ${longDate(booking.startAt, settings.timezone)} a las ${time(booking.startAt, settings.timezone)}).`}
+                  message={proofMessage}
                 >
-                  Enviar comprobante por WhatsApp
+                  {depositData && !depositData.amount ? 'Preguntar el valor del abono' : 'Enviar comprobante por WhatsApp'}
                 </WhatsAppButtonLink>
               </div>
             )}
@@ -187,7 +220,7 @@ export default function BookingLookup() {
             ) : (
               <div className="border-t border-line px-6 py-5">
                 <p className="mb-4 text-sm leading-relaxed text-ink-500">
-                  ¿Necesitas cambiar la fecha o cancelar? Escríbenos por WhatsApp y lo resolvemos.
+                  ¿Necesitas cambiar la fecha, la dirección o cancelar? Escríbeme por WhatsApp y lo resolvemos.
                 </p>
                 <WhatsAppButtonLink
                   variant="secondary"

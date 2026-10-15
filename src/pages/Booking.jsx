@@ -13,7 +13,7 @@ export default function Booking() {
           <SectionTitle
             eyebrow="Agenda en línea"
             title="Reserva tu cita"
-            subtitle="Cuatro pasos y sin necesidad de crear cuenta."
+            subtitle="Cuatro pasos, sin crear cuenta. Te maquillo a domicilio, donde estés."
             as="h1"
           />
         </div>

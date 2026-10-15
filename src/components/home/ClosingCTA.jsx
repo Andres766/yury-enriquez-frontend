@@ -9,8 +9,9 @@ import { firstName } from './contactInfo.js';
  * Cierre corto con los dos caminos: reservar o escribir.
  *
  * Reemplaza en el inicio al bloque completo de contacto y horario, que
- * repetía el pie y la página de contacto. El horario y el mapa quedan en
- * /contacto, a un enlace.
+ * repetía el pie y la página de contacto. El horario y los datos de
+ * contacto quedan en /contacto, a un enlace. No se habla de dirección:
+ * Yury atiende a domicilio, es la clienta la que dice dónde.
  *
  * `primary` decide qué botón va sólido: en el inicio el objetivo es la
  * reserva; en /contacto, donde la gente llega a escribir, es WhatsApp.
@@ -61,7 +62,7 @@ export default function ClosingCTA({
             to="/contacto"
             className="inline-block py-2 text-sm font-medium text-brand-700 underline decoration-brand-300 underline-offset-4 transition hover:decoration-brand-600"
           >
-            Ver dirección y horario
+            Ver horario y contacto
           </Link>
         )}
       </div>
