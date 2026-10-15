@@ -112,9 +112,48 @@ export const WEEKDAYS = [
   { value: 7, label: 'Domingo', short: 'Dom' },
 ];
 
+/**
+ * Celular colombiano a solo dígitos con indicativo, listo para wa.me.
+ *
+ * "310 555 0142", "3105550142", "+57 310…", "0057310…" → "573105550142".
+ * Un número de 10 dígitos que empieza por 3 es un móvil colombiano sin
+ * indicativo: sin el 57, wa.me abre otro país o no abre nada. Lo que no
+ * encaje se devuelve solo con sus dígitos, sin inventar nada.
+ */
+export function normalizeCoPhone(raw) {
+  let digits = String(raw ?? '').replace(/\D/g, '');
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  if (digits.length === 10 && digits.startsWith('3')) return `57${digits}`;
+  return digits;
+}
+
 /** Enlace de WhatsApp con mensaje prellenado. */
 export function whatsappLink(number, message) {
-  const clean = (number ?? '').replace(/\D/g, '');
+  const clean = normalizeCoPhone(number);
   const text = message ? `?text=${encodeURIComponent(message)}` : '';
   return `https://wa.me/${clean}${text}`;
+}
+
+// ── Precio según el modo del servicio ────────────────────────────────
+
+export const PRICE_MODE_LABEL = {
+  FIXED: 'Precio fijo',
+  FROM: 'Precio desde',
+  QUOTE: 'Se cotiza por WhatsApp',
+};
+
+/**
+ * Cómo se muestra el precio de un servicio.
+ *   FIXED → "$120.000"
+ *   FROM  → "Desde $120.000"
+ *   QUOTE → "Precio a cotizar"
+ * Devuelve también `short` (para chips y tarjetas pequeñas) y `isQuote`,
+ * porque en modo cotizar los botones cambian a WhatsApp.
+ */
+export function priceLabel(service) {
+  const mode = service?.priceMode ?? 'FIXED';
+  const amount = money(service?.priceCents, service?.currency);
+  if (mode === 'QUOTE') return { mode, text: 'Precio a cotizar', short: 'A cotizar', isQuote: true };
+  if (mode === 'FROM') return { mode, text: `Desde ${amount}`, short: `Desde ${amount}`, isQuote: false };
+  return { mode, text: amount, short: amount, isQuote: false };
 }

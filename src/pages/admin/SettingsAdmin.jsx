@@ -3,7 +3,7 @@ import { api, ApiError } from '../../lib/api.js';
 import { useToast } from '../../context/ToastContext.jsx';
 import { Button, Input, Textarea, Select, LoadingBlock, Alert } from '../../components/ui/index.jsx';
 import ThemePicker from '../../components/admin/ThemePicker.jsx';
-import { applyTheme } from '../../context/SettingsContext.jsx';
+import { applyTheme, useSettings } from '../../context/SettingsContext.jsx';
 
 /**
  * Ajustes del negocio.
@@ -129,6 +129,7 @@ function seasonalSummary(form) {
 
 export default function SettingsAdmin() {
   const toast = useToast();
+  const { reload: reloadSiteSettings } = useSettings();
   const [form, setForm] = useState(null);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -196,6 +197,9 @@ export default function SettingsAdmin() {
       });
       savedTheme.current = settings.effectiveTheme ?? settings.theme;
       applyTheme(savedTheme.current);
+      // La web pública de esta misma pestaña (decoración de temporada,
+      // WhatsApp, redes…) se entera ya, sin tener que recargar.
+      reloadSiteSettings();
       toast.success('Ajustes guardados. La web se actualiza en unos segundos.');
     } catch (error) {
       if (error instanceof ApiError && error.details?.length) {

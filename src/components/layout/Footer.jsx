@@ -1,6 +1,10 @@
 import { Link } from 'react-router-dom';
 import { useSettings } from '../../context/SettingsContext.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { Wordmark } from './Logo.jsx';
+import { normalizeCoPhone, whatsappLink } from '../../lib/format.js';
+import WhatsAppIcon from '../home/WhatsAppIcon.jsx';
+import { firstName, formatCoPhone, instagramHandle } from '../home/contactInfo.js';
 
 const SOCIAL = [
   {
@@ -20,14 +24,41 @@ const SOCIAL = [
   },
 ];
 
+/**
+ * Pie de página.
+ *
+ * WhatsApp va de primero en Contacto porque es el canal real del
+ * negocio. La cuenta, que es opcional, queda en una sola línea en vez de
+ * una columna entera. Los títulos de columna van en Jost, como los
+ * eyebrows: en Cormorant a 12 px y en mayúsculas salían demasiado finos.
+ *
+ * En el celular cada enlace tiene unos 40 px de alto (py-2), para que se
+ * pueda tocar sin acertarle al de al lado.
+ */
+const linkClass = 'inline-block py-2 text-ink-600 transition hover:text-brand-700 sm:py-1';
+const headingClass = 'mb-3 font-sans text-xs font-semibold uppercase tracking-widest text-ink-400';
+
+/**
+ * Enlace para llamar. El "+" solo va cuando el número ya trae el 57: a
+ * un fijo sin indicativo ("602 7234567") anteponerle "+" lo convierte en
+ * un número de otro país.
+ */
+function telHref(raw) {
+  const digits = normalizeCoPhone(raw);
+  return `tel:${digits.length === 12 && digits.startsWith('57') ? '+' : ''}${digits}`;
+}
+
 export default function Footer() {
   const settings = useSettings();
+  const { isAuthenticated } = useAuth();
   const year = new Date().getFullYear();
   const socials = SOCIAL.filter((s) => settings[s.key]);
+  const number = settings.whatsappNumber || settings.contactPhone;
+  const handle = instagramHandle(settings.instagramUrl);
 
   return (
-    <footer className="mt-24 border-t border-line bg-surface">
-      <div className="container-page grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8 lg:py-16">
+    <footer className="mt-16 border-t border-line bg-surface sm:mt-24">
+      <div className="container-page grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-3 lg:gap-8 lg:py-16">
         <div className="sm:col-span-2 lg:col-span-1">
           <Wordmark brandName={settings.brandName} tagline={settings.tagline} />
 
@@ -50,78 +81,115 @@ export default function Footer() {
               ))}
             </ul>
           )}
+
+          {/* El usuario junto a los íconos: quien viene de Instagram
+              reconoce así que es la misma cuenta. */}
+          {handle && (
+            <a
+              href={settings.instagramUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${linkClass} mt-2 text-sm`}
+            >
+              {handle}
+              <span className="sr-only"> en Instagram (se abre en una pestaña nueva)</span>
+            </a>
+          )}
         </div>
 
         <nav aria-labelledby="footer-explorar">
-          <h2 id="footer-explorar" className="mb-4 text-xs font-semibold uppercase tracking-widest text-ink-400">
+          <h2 id="footer-explorar" className={headingClass}>
             Explorar
           </h2>
-          <ul className="space-y-3 text-sm">
+          <ul className="space-y-1 text-sm">
             {[
+              ['/trabajos', 'Mi trabajo'],
               ['/servicios', 'Servicios y precios'],
               ['/ocasiones', 'Para cada ocasión'],
-              ['/reservar', 'Reservar una cita'],
+              ['/reservar', 'Reservar mi cita'],
               ['/mi-reserva', 'Consultar mi reserva'],
               ['/contacto', 'Contacto y ubicación'],
             ].map(([to, label]) => (
               <li key={to}>
-                <Link to={to} className="text-ink-600 transition hover:text-brand-700">
+                <Link to={to} className={linkClass}>
                   {label}
                 </Link>
               </li>
             ))}
           </ul>
-        </nav>
 
-        <nav aria-labelledby="footer-cuenta">
-          <h2 id="footer-cuenta" className="mb-4 text-xs font-semibold uppercase tracking-widest text-ink-400">
-            Mi cuenta
-          </h2>
-          <ul className="space-y-3 text-sm">
-            <li>
-              <Link to="/ingresar" className="text-ink-600 transition hover:text-brand-700">
-                Ingresar
+          {/* Con sesión iniciada, "Ingresar" no tiene sentido: se va
+              directo a la cuenta. */}
+          <p className="mt-4 text-sm text-ink-500">
+            {isAuthenticated ? (
+              <Link to="/mi-cuenta" className={linkClass}>
+                Mis citas y tarjeta de fidelidad
               </Link>
-            </li>
-            <li>
-              <Link to="/registro" className="text-ink-600 transition hover:text-brand-700">
-                Crear cuenta
-              </Link>
-            </li>
-            <li>
-              <Link to="/mi-cuenta" className="text-ink-600 transition hover:text-brand-700">
-                Tarjeta de fidelidad
-              </Link>
-            </li>
-          </ul>
-          <p className="mt-4 text-xs leading-relaxed text-ink-400">
-            Reservar no requiere cuenta. Registrarse solo suma beneficios.
+            ) : (
+              <>
+                <Link to="/ingresar" className={linkClass}>
+                  Ingresar
+                </Link>
+                <span className="mx-2 text-ink-400" aria-hidden="true">
+                  ·
+                </span>
+                <Link to="/mi-cuenta" className={linkClass}>
+                  Tarjeta de fidelidad
+                </Link>
+              </>
+            )}
           </p>
+          {!isAuthenticated && <p className="text-xs leading-relaxed text-ink-400">Reservar no requiere cuenta.</p>}
         </nav>
 
         <div>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-ink-400">Contacto</h2>
-          <ul className="space-y-3 text-sm text-ink-600">
-            {settings.contactPhone && (
+          <h2 className={headingClass}>Contacto</h2>
+          <ul className="space-y-1 text-sm text-ink-600">
+            {number && (
               <li>
                 <a
-                  href={`tel:${settings.contactPhone.replace(/\s/g, '')}`}
-                  className="transition hover:text-brand-700"
+                  href={whatsappLink(number, `Hola ${firstName(settings.brandName)}, quisiera consultar por una cita.`)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`${linkClass} inline-flex items-center gap-2`}
                 >
-                  {settings.contactPhone}
+                  <WhatsAppIcon className="h-4 w-4 text-wa" />
+                  <span>
+                    WhatsApp <span className="tabular-nums">{formatCoPhone(number)}</span>
+                  </span>
+                  <span className="sr-only">(se abre en una pestaña nueva)</span>
+                </a>
+              </li>
+            )}
+            {settings.contactPhone && (
+              <li>
+                <a href={telHref(settings.contactPhone)} className={linkClass}>
+                  Llamar al <span className="tabular-nums">{formatCoPhone(settings.contactPhone)}</span>
                 </a>
               </li>
             )}
             {settings.contactEmail && (
               <li>
-                <a href={`mailto:${settings.contactEmail}`} className="transition hover:text-brand-700">
+                <a href={`mailto:${settings.contactEmail}`} className={`${linkClass} break-all`}>
                   {settings.contactEmail}
                 </a>
               </li>
             )}
-            {settings.addressLine && <li className="leading-relaxed">{settings.addressLine}</li>}
+            {settings.addressLine && (
+              <li>
+                <a
+                  href={settings.mapUrl || `https://maps.google.com/?q=${encodeURIComponent(settings.addressLine)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`${linkClass} leading-relaxed`}
+                >
+                  {settings.addressLine}
+                  <span className="sr-only"> (ver en el mapa, se abre en una pestaña nueva)</span>
+                </a>
+              </li>
+            )}
             {settings.businessHoursNote && (
-              <li className="leading-relaxed text-ink-500">{settings.businessHoursNote}</li>
+              <li className="pt-1 leading-relaxed text-ink-500">{settings.businessHoursNote}</li>
             )}
           </ul>
         </div>

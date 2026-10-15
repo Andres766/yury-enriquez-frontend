@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
+import { waHref } from '../lib/catalog.js';
+import { useSettings } from '../context/SettingsContext.jsx';
 import OccasionsGrid from '../components/home/OccasionsGrid.jsx';
+import { WhatsAppIcon } from '../components/catalog/icons.jsx';
 import { SectionTitle, LoadingBlock, Reveal, Button } from '../components/ui/index.jsx';
 
 export default function Occasions() {
+  const settings = useSettings();
   const [occasions, setOccasions] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -14,6 +18,8 @@ export default function Occasions() {
       .catch(() => setOccasions([]))
       .finally(() => setLoading(false));
   }, []);
+
+  const waAsk = waHref(settings, 'pregunta', {});
 
   return (
     <div className="pb-10">
@@ -28,22 +34,30 @@ export default function Occasions() {
         </div>
       </div>
 
-      {loading ? <LoadingBlock /> : <OccasionsGrid occasions={occasions} />}
+      {/* El h1 de arriba ya dice lo mismo que el título de la grilla. */}
+      {loading ? <LoadingBlock /> : <OccasionsGrid occasions={occasions} showTitle={false} />}
 
       <Reveal className="container-page">
         <div className="veil flex flex-col items-center gap-5 rounded-[2rem] border border-line px-6 py-12 text-center sm:px-12">
           <h2 className="text-balance text-2xl sm:text-3xl">¿Tu evento no encaja en ninguna?</h2>
           <p className="text-pretty max-w-lg text-[15px] leading-relaxed text-ink-600">
-            Escríbenos contándonos de qué se trata y armamos algo a la medida. Trabajamos también
-            desplazamientos, grupos y eventos corporativos.
+            Escríbenos contándonos de qué se trata, para cuándo es y cuántas personas son, y vemos cómo
+            ayudarte.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Button to="/reservar" size="lg">
               Reservar una cita
             </Button>
-            <Button to="/contacto" variant="secondary" size="lg">
-              Escribirnos
-            </Button>
+            {waAsk ? (
+              <Button href={waAsk} target="_blank" rel="noopener noreferrer" variant="secondary" size="lg">
+                <WhatsAppIcon className="h-5 w-5 text-wa" />
+                Escribirnos por WhatsApp
+              </Button>
+            ) : (
+              <Button to="/contacto" variant="secondary" size="lg">
+                Escribirnos
+              </Button>
+            )}
           </div>
         </div>
       </Reveal>

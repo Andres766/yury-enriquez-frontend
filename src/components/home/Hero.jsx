@@ -1,60 +1,113 @@
 import { motion, useReducedMotion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { Button } from '../ui/index.jsx';
 import { useSettings } from '../../context/SettingsContext.jsx';
+import { whatsappLink } from '../../lib/format.js';
+import { PORTFOLIO, photoSources } from '../../data/portfolio.js';
 import PapelPicadoGarland from '../seasonal/PapelPicadoGarland.jsx';
-import { Cobweb } from '../seasonal/HalloweenIcons.jsx';
+import WhatsAppIcon from './WhatsAppIcon.jsx';
+import { firstName } from './contactInfo.js';
 
 /**
  * Portada.
  *
- * Mobile-first: en móvil es una columna (texto, imagen, indicadores);
- * a partir de `lg` pasa a dos columnas con la imagen desbordando hacia
- * el margen derecho. El texto nunca se superpone a la foto en pantallas
- * pequeñas, que es donde ese recurso suele romper la legibilidad.
+ * Mobile-first: en el celular va primero la foto, baja (unos 44svh), y
+ * debajo quién es, qué hace y dónde, el titular y los botones. Así
+ * quien llega desde Instagram ve el trabajo real en el primer pantallazo
+ * y el botón de reservar no queda enterrado. A partir de `lg` pasa a dos
+ * columnas, con la foto a la derecha.
  *
- * En temporada de Halloween se viste: guirnalda de papel picado sobre
- * el contenido, la foto a luz de vela y una telaraña en su esquina.
- * Sin araña sobre la foto: con una foto real caía sobre la cara de
- * Yury. El texto no cambia de sitio.
+ * Dos caminos: reservar en línea, o cotizar la boda por WhatsApp. Las
+ * novias suelen reservar con meses de anticipación y preguntar antes de
+ * decidir; el calendario no es su primer paso.
+ *
+ * En temporada de Halloween cambia la foto, no el decorado: se muestra
+ * una catrina real hecha por Yury, sin tintes encima (un filtro de color
+ * cambia el tono de piel y del maquillaje, que es justo lo que se vende).
  */
+
+const HALLOWEEN_PHOTO = PORTFOLIO.find((p) => p.id === 'catrina-media-cara');
+
 export default function Hero() {
   const settings = useSettings();
   const reduced = useReducedMotion();
-  const halloween = settings.theme === 'HALLOWEEN';
+  const halloween = settings.theme === 'HALLOWEEN' && Boolean(HALLOWEEN_PHOTO);
+
+  const number = settings.whatsappNumber || settings.contactPhone;
+  const bridalMessage = `Hola ${firstName(settings.brandName)}, me caso el ___ en ___ y quiero cotizar maquillaje y peinado de novia.`;
 
   const fadeUp = (delay = 0) => ({
-    initial: reduced ? false : { opacity: 0, y: 26 },
+    initial: reduced ? false : { opacity: 0, y: 22 },
     animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.75, delay, ease: [0.22, 0.61, 0.36, 1] },
+    transition: { duration: 0.7, delay, ease: [0.22, 0.61, 0.36, 1] },
   });
 
   return (
-    <section className="veil relative overflow-hidden">
-      {/* Adornos de fondo, decorativos */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-brand-100/60 blur-3xl sm:h-96 sm:w-96" />
-        <div className="absolute -left-32 top-1/3 h-72 w-72 rounded-full bg-gold-100/70 blur-3xl" />
-      </div>
-
+    <section className="veil relative overflow-hidden" aria-labelledby="titulo-portada">
+      {/* La guirnalda solo desde `sm`: en el celular empujaba la foto
+          fuera del primer pantallazo. */}
       {halloween && (
-        <div className="container-page absolute inset-x-0 top-0 z-10">
+        <div className="container-page absolute inset-x-0 top-0 z-10 hidden sm:block">
           <PapelPicadoGarland />
         </div>
       )}
 
       <div
-        className={`container-page relative grid items-center gap-12 py-16 sm:py-20 lg:grid-cols-[1.05fr_1fr] lg:gap-16 lg:py-28 ${
-          halloween ? 'pt-24 sm:pt-28 lg:pt-32' : ''
+        className={`container-page relative grid items-center gap-7 pb-14 pt-4 sm:gap-10 sm:pb-20 sm:pt-10 lg:grid-cols-[1.05fr_1fr] lg:gap-16 lg:py-24 ${
+          halloween ? 'sm:pt-28 lg:pt-32' : ''
         }`}
       >
+        <motion.div
+          initial={reduced ? false : { opacity: 0, scale: 0.97 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.8, ease: [0.22, 0.61, 0.36, 1] }}
+          className="relative order-first mx-auto w-full max-w-md lg:order-last lg:max-w-none"
+        >
+          <div className="relative h-[44svh] min-h-[15rem] max-h-[32rem] overflow-hidden rounded-[2rem] border border-line bg-blush shadow-lift lg:aspect-[4/5] lg:h-auto lg:max-h-none lg:rounded-[2.5rem]">
+            {halloween ? (
+              <img
+                {...photoSources(HALLOWEEN_PHOTO.id)}
+                sizes="(min-width: 1024px) 45vw, 90vw"
+                alt={HALLOWEEN_PHOTO.alt}
+                style={{ objectPosition: HALLOWEEN_PHOTO.focus }}
+                className="h-full w-full object-cover"
+                fetchpriority="high"
+                decoding="async"
+              />
+            ) : (
+              /* Foto real del estudio. WebP para quien lo soporte, JPG de
+                 respaldo; dos anchos para no bajar 1084 px en un celular. */
+              <picture>
+                <source
+                  type="image/webp"
+                  srcSet="/img/hero-yury-640.webp 640w, /img/hero-yury-1084.webp 1084w"
+                  sizes="(min-width: 1024px) 45vw, 90vw"
+                />
+                <img
+                  src="/img/hero-yury-1084.jpg"
+                  srcSet="/img/hero-yury-640.jpg 640w, /img/hero-yury-1084.jpg 1084w"
+                  sizes="(min-width: 1024px) 45vw, 90vw"
+                  width="1084"
+                  height="1451"
+                  alt="Yury Enríquez maquillando a una clienta en su estudio, frente al aro de luz"
+                  className="h-full w-full object-cover object-[50%_35%]"
+                  fetchpriority="high"
+                  decoding="async"
+                />
+              </picture>
+            )}
+          </div>
+        </motion.div>
+
         <div className="text-center lg:text-left">
-          <motion.p {...fadeUp(0)} className="eyebrow">
-            {halloween ? 'Temporada de Catrinas · Maquillaje · Peinado' : 'Maquillaje · Peinado · Cita previa'}
+          <motion.p {...fadeUp(0.05)} className="eyebrow">
+            {settings.brandName} · Maquilladora profesional en Pasto
           </motion.p>
 
           <motion.h1
-            {...fadeUp(0.08)}
-            className="text-balance mt-5 text-[2.5rem] leading-[1.08] sm:text-6xl lg:text-[4.1rem]"
+            {...fadeUp(0.1)}
+            id="titulo-portada"
+            className="text-balance mt-4 text-[2.25rem] leading-[1.08] sm:mt-5 sm:text-6xl lg:text-[4.1rem]"
           >
             Que el día que
             <span className="relative mx-2 inline-block italic text-brand-600">
@@ -82,15 +135,15 @@ export default function Hero() {
 
           <motion.p
             {...fadeUp(0.16)}
-            className="text-pretty mx-auto mt-6 max-w-xl text-base leading-relaxed text-ink-600 sm:text-lg lg:mx-0"
+            className="text-pretty mx-auto mt-4 max-w-xl text-[15px] leading-relaxed text-ink-600 sm:mt-6 sm:text-lg lg:mx-0"
           >
-            Bodas, quinceañeros, grados y sesiones de fotos. Un solo turno a la vez, productos
-            profesionales de larga duración y un look pensado para ti, no para una plantilla.
+            Maquillaje y peinado para novias, quinceañeras, grados y sesiones de fotos. Reserva en
+            línea con los horarios que de verdad tengo libres.
           </motion.p>
 
           <motion.div
-            {...fadeUp(0.24)}
-            className="mt-9 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-center lg:justify-start"
+            {...fadeUp(0.22)}
+            className="mt-7 flex flex-col items-stretch gap-3 sm:mt-9 sm:flex-row sm:items-center sm:justify-center lg:justify-start"
           >
             <Button to="/reservar" size="lg">
               Reservar mi cita
@@ -98,119 +151,38 @@ export default function Hero() {
                 <path d="M3 8h9m0 0L8.5 4.5M12 8l-3.5 3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </Button>
-            <Button to="/servicios" variant="secondary" size="lg">
-              Ver servicios y precios
-            </Button>
-          </motion.div>
-
-          <motion.p {...fadeUp(0.3)} className="mt-5 text-sm text-ink-500">
-            Sin registro obligatorio · Pago por transferencia o en efectivo
-          </motion.p>
-
-          <motion.dl
-            {...fadeUp(0.38)}
-            className="mt-12 grid grid-cols-3 gap-4 border-t border-line pt-8 text-center lg:text-left"
-          >
-            {[
-              ['8+', 'años de experiencia'],
-              ['1', 'clienta por turno'],
-              ['24 h', 'para reprogramar'],
-            ].map(([value, label]) => (
-              <div key={label}>
-                <dt className="sr-only">{label}</dt>
-                <dd>
-                  <span className="block font-display text-3xl text-brand-600 sm:text-4xl">{value}</span>
-                  <span className="mt-1 block text-xs leading-snug text-ink-500">{label}</span>
-                </dd>
-              </div>
-            ))}
-          </motion.dl>
-        </div>
-
-        <motion.div
-          initial={reduced ? false : { opacity: 0, scale: 0.94 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.9, delay: 0.15, ease: [0.22, 0.61, 0.36, 1] }}
-          className="relative mx-auto w-full max-w-md lg:max-w-none"
-        >
-          <div className="relative aspect-[4/5] overflow-hidden rounded-[2.5rem] border border-line bg-blush shadow-lift">
-            {/* Foto real del estudio. WebP para quien lo soporte, JPG de
-                respaldo; dos anchos para no bajar 1084 px en un celular. */}
-            <picture>
-              <source
-                type="image/webp"
-                srcSet="/img/hero-yury-640.webp 640w, /img/hero-yury-1084.webp 1084w"
-                sizes="(min-width: 1024px) 45vw, 90vw"
-              />
-              <img
-                src="/img/hero-yury-1084.jpg"
-                srcSet="/img/hero-yury-640.jpg 640w, /img/hero-yury-1084.jpg 1084w"
-                sizes="(min-width: 1024px) 45vw, 90vw"
-                width="1084"
-                height="1451"
-                alt="Yury Enríquez maquillando a una clienta en su estudio, frente al aro de luz"
-                className="h-full w-full object-cover object-[50%_35%]"
-                fetchpriority="high"
-                decoding="async"
-              />
-            </picture>
-            <div className="absolute inset-0 bg-gradient-to-t from-scrim/25 via-transparent to-transparent" aria-hidden="true" />
-
-            {halloween && (
-              <>
-                {/* Foto a luz de vela: cálido desde abajo, noche morada arriba */}
-                <div
-                  aria-hidden="true"
-                  className="absolute inset-0 mix-blend-soft-light"
-                  style={{
-                    backgroundImage:
-                      'linear-gradient(to top, rgb(240 146 62 / 0.35), transparent 45%), linear-gradient(to bottom, rgb(74 32 96 / 0.4), transparent 40%)',
-                  }}
-                />
-                <div aria-hidden="true" className="absolute inset-0 shadow-[inset_0_0_80px_20px_rgb(22_17_27/0.65)]" />
-                <Cobweb
-                  className="pointer-events-none absolute -left-2 -top-2 h-28 w-28 text-white/45 sm:h-36 sm:w-36"
-                  strokeWidth={0.9}
-                />
-              </>
+            {number ? (
+              <Button
+                href={whatsappLink(number, bridalMessage)}
+                target="_blank"
+                rel="noopener noreferrer"
+                variant="secondary"
+                size="lg"
+              >
+                <WhatsAppIcon className="h-5 w-5 text-wa" />
+                Cotizar mi boda
+                <span className="sr-only">por WhatsApp (se abre en una pestaña nueva)</span>
+              </Button>
+            ) : (
+              <Button to="/servicios?ocasion=bodas" variant="secondary" size="lg">
+                Ver opciones para novias
+              </Button>
             )}
-          </div>
-
-
-          {/* Tarjeta flotante decorativa */}
-          <motion.div
-            initial={reduced ? false : { opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.6 }}
-            className="absolute -bottom-5 left-4 flex items-center gap-3 rounded-2xl border border-line bg-surface/95 px-4 py-3 shadow-lift backdrop-blur-sm sm:-left-6 sm:bottom-8"
-          >
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-blush text-brand-600">
-              <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" aria-hidden="true">
-                <rect x="2.8" y="4" width="14.4" height="13.2" rx="2.4" stroke="currentColor" strokeWidth="1.3" />
-                <path d="M2.8 8h14.4M6.8 2.6v2.8M13.2 2.6v2.8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-                <circle cx="10" cy="12.4" r="1.5" fill="currentColor" />
-              </svg>
-            </span>
-            <span className="leading-tight">
-              <span className="block text-sm font-semibold text-ink-800">Agenda en línea</span>
-              <span className="block text-xs text-ink-500">Elige tu día y tu hora</span>
-            </span>
           </motion.div>
 
-          {settings.businessHoursNote && (
-            <motion.div
-              initial={reduced ? false : { opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.75 }}
-              className="absolute -top-4 right-3 hidden max-w-[13rem] rounded-2xl border border-line bg-surface/95 px-4 py-3 text-xs leading-relaxed text-ink-600 shadow-lift backdrop-blur-sm sm:block"
+          <motion.p {...fadeUp(0.28)} className="mt-5 text-sm text-ink-500">
+            Sin crear cuenta · Pagas por transferencia o en efectivo
+            <span className="mx-2 text-ink-400" aria-hidden="true">
+              ·
+            </span>
+            <Link
+              to="/servicios"
+              className="inline-block py-2 font-medium text-brand-700 underline decoration-brand-300 underline-offset-4 transition hover:decoration-brand-600"
             >
-              <span className="mb-1 block text-[10px] font-semibold uppercase tracking-widest text-brand-700">
-                Horario
-              </span>
-              {settings.businessHoursNote}
-            </motion.div>
-          )}
-        </motion.div>
+              Ver servicios y precios
+            </Link>
+          </motion.p>
+        </div>
       </div>
     </section>
   );

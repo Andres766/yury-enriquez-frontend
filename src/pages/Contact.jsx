@@ -1,18 +1,33 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import ContactSection from '../components/home/ContactSection.jsx';
-import { SectionTitle, Reveal, Button } from '../components/ui/index.jsx';
+import ClosingCTA from '../components/home/ClosingCTA.jsx';
+import { SectionTitle, Reveal } from '../components/ui/index.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 
 export default function Contact() {
   const settings = useSettings();
-  const [rules, setRules] = useState([]);
+  // null mientras no se sabe: con el servidor dormido la respuesta tarda,
+  // y una tabla vacía se leía como "Cerrado" toda la semana.
+  const [rules, setRules] = useState(null);
+  const [rulesLoading, setRulesLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     api
       .get('/availability/rules')
-      .then((d) => setRules(d.rules ?? []))
-      .catch(() => setRules([]));
+      .then((d) => {
+        if (!cancelled) setRules(d.rules ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setRules(null);
+      })
+      .finally(() => {
+        if (!cancelled) setRulesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -22,13 +37,13 @@ export default function Contact() {
           <SectionTitle
             eyebrow="Contacto"
             title="Hablemos de tu cita"
-            subtitle="Resolvemos dudas por WhatsApp en minutos. Si ya sabes qué quieres, puedes reservar directamente en línea."
+            subtitle="Escríbeme por WhatsApp y resolvemos tus dudas. Si ya sabes qué quieres, puedes reservar directamente en línea."
             as="h1"
           />
         </div>
       </div>
 
-      <ContactSection rules={rules} compact />
+      <ContactSection rules={rules} loading={rulesLoading} compact />
 
       {settings.mapUrl && (
         <Reveal className="container-page pb-16">
@@ -56,18 +71,12 @@ export default function Contact() {
         </Reveal>
       )}
 
-      <Reveal className="container-page pb-4">
-        <div className="veil flex flex-col items-center gap-5 rounded-[2rem] border border-line px-6 py-12 text-center sm:px-12">
-          <h2 className="text-balance text-2xl sm:text-3xl">¿Lista para agendar?</h2>
-          <p className="text-pretty max-w-lg text-[15px] leading-relaxed text-ink-600">
-            El calendario en línea muestra los horarios reales disponibles. Elige el tuyo y te
-            confirmamos enseguida.
-          </p>
-          <Button to="/reservar" size="lg">
-            Reservar mi cita
-          </Button>
-        </div>
-      </Reveal>
+      <ClosingCTA
+        primary="whatsapp"
+        title="¿Lista para agendar?"
+        text="Cuéntame qué necesitas por WhatsApp, o elige tu horario en el calendario en línea: solo muestra los que tengo libres."
+        showContactLink={false}
+      />
     </div>
   );
 }

@@ -32,10 +32,32 @@
   body {
     @apply bg-cream font-sans text-ink-700 antialiased;
     text-rendering: optimizeLegibility;
+    /*
+     * Cormorant trae por defecto números de estilo antiguo: el 1 tiene la
+     * altura de una minúscula y se lee como una I, y en "$ 320.000" los
+     * ceros parecen "o". Los precios se leen para decidir, así que en todo
+     * el sitio van números de altura completa. Se pone en el body para
+     * que lo hereden también los h1-h4, que reciben la fuente por @apply.
+     * A Jost no le cambia nada: sus números ya son así.
+     */
+    font-variant-numeric: lining-nums;
     /* Transición suave al cambiar de tema desde el panel. */
     transition:
       background-color 0.4s ease,
       color 0.4s ease;
+  }
+
+  /*
+   * Las utilidades de números de Tailwind (`tabular-nums` en horarios y
+   * precios) reescriben font-variant-numeric entero y borraban el
+   * lining-nums heredado del body. Con la variable de la figura ya
+   * puesta, `tabular-nums` suma números parejos sin volver a los de
+   * estilo antiguo. `oldstyle-nums` la sigue pudiendo cambiar.
+   */
+  *,
+  ::before,
+  ::after {
+    --tw-numeric-figure: lining-nums;
   }
 
   h1,

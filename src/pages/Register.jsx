@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ApiError } from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useToast } from '../context/ToastContext.jsx';
@@ -33,11 +33,14 @@ export default function Register() {
   const { register } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
+  // La pantalla final de la reserva manda aquí los datos que la clienta
+  // ya escribió, para que crear la cuenta no sea volver a teclearlos.
+  const prefill = useLocation().state?.prefill ?? {};
 
   const [form, setForm] = useState({
-    fullName: '',
-    email: '',
-    phone: '',
+    fullName: prefill.fullName ?? '',
+    email: prefill.email ?? '',
+    phone: prefill.phone ?? '',
     password: '',
     marketingOptIn: true,
     website: '',

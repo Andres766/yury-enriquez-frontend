@@ -13,6 +13,7 @@ import OccasionDetail from './pages/OccasionDetail.jsx';
 import Booking from './pages/Booking.jsx';
 import BookingLookup from './pages/BookingLookup.jsx';
 import Contact from './pages/Contact.jsx';
+import Portfolio from './pages/Portfolio.jsx';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
 import Account from './pages/Account.jsx';
@@ -31,6 +32,8 @@ const ServicesAdmin = lazy(() => import('./pages/admin/ServicesAdmin.jsx'));
 const PromotionsAdmin = lazy(() => import('./pages/admin/PromotionsAdmin.jsx'));
 const LoyaltyAdmin = lazy(() => import('./pages/admin/LoyaltyAdmin.jsx'));
 const SettingsAdmin = lazy(() => import('./pages/admin/SettingsAdmin.jsx'));
+const OccasionsAdmin = lazy(() => import('./pages/admin/OccasionsAdmin.jsx'));
+const TestimonialsAdmin = lazy(() => import('./pages/admin/TestimonialsAdmin.jsx'));
 
 export default function App() {
   return (
@@ -45,6 +48,7 @@ export default function App() {
           <Route path="ocasiones/:slug" element={<OccasionDetail />} />
           <Route path="reservar" element={<Booking />} />
           <Route path="mi-reserva" element={<BookingLookup />} />
+          <Route path="trabajos" element={<Portfolio />} />
           <Route path="contacto" element={<Contact />} />
           <Route path="ingresar" element={<Login />} />
           <Route path="registro" element={<Register />} />
@@ -74,7 +78,9 @@ export default function App() {
           <Route path="reservas" element={<BookingsAdmin />} />
           <Route path="agenda" element={<ScheduleAdmin />} />
           <Route path="servicios" element={<ServicesAdmin />} />
+          <Route path="ocasiones" element={<OccasionsAdmin />} />
           <Route path="promociones" element={<PromotionsAdmin />} />
+          <Route path="testimonios" element={<TestimonialsAdmin />} />
           <Route path="fidelidad" element={<LoyaltyAdmin />} />
           <Route path="ajustes" element={<SettingsAdmin />} />
         </Route>

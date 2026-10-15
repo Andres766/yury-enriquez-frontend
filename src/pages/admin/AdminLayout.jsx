@@ -28,9 +28,19 @@ const NAV = [
     icon: 'M12 3.5 14.4 9l5.6.5-4.3 3.9 1.3 5.6L12 16l-5 3 1.3-5.6L4 9.5 9.6 9z',
   },
   {
+    to: '/admin/ocasiones',
+    label: 'Ocasiones',
+    icon: 'M4.5 7.5h15v12h-15zM8 7.5V5.5a4 4 0 0 1 8 0v2',
+  },
+  {
     to: '/admin/promociones',
     label: 'Promociones',
     icon: 'M3.5 12 12 3.5h8v8L11.5 20zM16 8h.01',
+  },
+  {
+    to: '/admin/testimonios',
+    label: 'Testimonios',
+    icon: 'M5 5.5h14v10H9.5L5 19.5z',
   },
   {
     to: '/admin/fidelidad',

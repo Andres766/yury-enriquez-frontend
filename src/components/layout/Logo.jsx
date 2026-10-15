@@ -33,27 +33,41 @@ export function LogoMark({ className = 'h-9 w-9' }) {
  * Lockup completo: monograma + firma + bajada.
  *
  * `compact` lo reduce para la cabecera cuando se hace scroll.
+ *
+ * `monogram={false}` quita el "YE" de fondo: al tamaño de la barra se
+ * montaba sobre la "E" de Enríquez y se veía como una mancha. Se deja en
+ * el pie, el acceso y la pantalla de entrada, donde hay sitio.
+ *
+ * Por debajo de 380 px la firma baja un punto: en un Android de 360 px,
+ * logo, "Reservar" y el botón del menú no cabían en la barra.
  */
-export function Wordmark({ brandName = 'Yury Enríquez', tagline = 'Makeup Artist', compact = false }) {
+export function Wordmark({
+  brandName = 'Yury Enríquez',
+  tagline = 'Makeup Artist',
+  compact = false,
+  monogram = true,
+}) {
   return (
     <span className="flex flex-col items-start leading-none">
       <span className="relative inline-flex items-center justify-center">
         {/* Monograma al fondo, como en el logo original */}
-        <span
-          aria-hidden="true"
-          className={cx(
-            'absolute inset-0 flex items-center justify-center font-display font-medium leading-none tracking-tight text-brand-400/55 transition-all duration-300',
-            compact ? 'text-[2rem]' : 'text-[2.6rem] sm:text-[3rem]',
-          )}
-        >
-          YE
-        </span>
+        {monogram && (
+          <span
+            aria-hidden="true"
+            className={cx(
+              'absolute inset-0 flex items-center justify-center font-display font-medium leading-none tracking-tight text-brand-400/55 transition-all duration-300',
+              compact ? 'text-[2rem]' : 'text-[2.6rem] sm:text-[3rem]',
+            )}
+          >
+            YE
+          </span>
+        )}
 
         {/* Firma manuscrita al frente */}
         <span
           className={cx(
             'relative whitespace-nowrap font-script text-ink-900 transition-all duration-300',
-            compact ? 'text-[1.6rem]' : 'text-[2rem] sm:text-[2.35rem]',
+            compact ? 'text-[1.6rem]' : 'text-[1.75rem] min-[380px]:text-[2rem] sm:text-[2.35rem]',
           )}
         >
           {brandName}

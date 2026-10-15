@@ -1,35 +1,50 @@
-import { Reveal, SectionTitle, Button } from '../ui/index.jsx';
+import { Reveal, SectionTitle } from '../ui/index.jsx';
 import { useSettings } from '../../context/SettingsContext.jsx';
 import { whatsappLink, WEEKDAYS } from '../../lib/format.js';
+import WhatsAppIcon from './WhatsAppIcon.jsx';
+import { firstName, formatCoPhone } from './contactInfo.js';
 
 /**
  * Contacto, ubicación y horario.
  *
  * El horario se pinta desde las reglas reales de la agenda, así que si
  * la maquilladora cambia su disponibilidad en el panel, esta sección se
- * actualiza sola. `businessHoursNote` queda como resumen escrito.
+ * actualiza sola. `businessHoursNote` queda como respaldo escrito: solo
+ * se muestra si no llegaron las reglas, para no repetir la tabla.
+ *
+ * `rules` es null mientras no se sabe (cargando, o la API no respondió).
+ * Entonces no se pinta la tabla: vacía decía "Cerrado" los siete días,
+ * justo al lado de la nota con el horario.
+ *
+ * Se usa en /contacto: ahí la gente llega a escribir, así que WhatsApp
+ * va de primero en la lista. Los botones de WhatsApp y Reservar no se
+ * repiten aquí: la página cierra con ClosingCTA, que ya los trae, y
+ * tenerlos dos veces sumaba tres enlaces de WhatsApp en una sola página.
  */
-export default function ContactSection({ rules = [], compact = false }) {
+export default function ContactSection({ rules = null, loading = false, compact = false }) {
   const settings = useSettings();
 
   const byDay = WEEKDAYS.map((day) => ({
     ...day,
-    ranges: rules
+    ranges: (rules ?? [])
       .filter((r) => r.weekday === day.value && r.active)
       .sort((a, b) => a.startTime.localeCompare(b.startTime))
       .map((r) => `${r.startTime} – ${r.endTime}`),
   }));
 
+  const hasSchedule = byDay.some((day) => day.ranges.length > 0);
+
   const number = settings.whatsappNumber || settings.contactPhone;
+  const greeting = `Hola ${firstName(settings.brandName)}, quisiera consultar por una cita.`;
 
   return (
-    <section className="container-page py-20 sm:py-24" aria-labelledby="titulo-contacto">
+    <section className="container-page py-14 sm:py-20" aria-labelledby="titulo-contacto">
       {!compact && (
         <SectionTitle
           eyebrow="Contacto"
-          title="Dónde estamos y cuándo atendemos"
-          subtitle="Trabajamos únicamente con cita previa. Escríbenos si necesitas un horario que no aparece en el calendario."
-          className="mb-14"
+          title="Dónde atiendo y cuándo"
+          subtitle="Atiendo únicamente con cita previa. Escríbeme si necesitas un horario que no aparece en el calendario."
+          className="mb-8 sm:mb-12"
           as="h2"
         />
       )}
@@ -40,30 +55,31 @@ export default function ContactSection({ rules = [], compact = false }) {
       <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
         <Reveal className="card-surface overflow-hidden">
           <div className="p-6 sm:p-8">
-            <h3 className="text-2xl">Escríbenos</h3>
+            <h3 className="text-2xl">Escríbeme</h3>
             <p className="mt-2 text-sm leading-relaxed text-ink-500">
-              Por WhatsApp respondemos más rápido. Si prefieres, también puedes llamar o enviar un correo.
+              Por WhatsApp te respondo más rápido. Si prefieres, también puedes llamar o enviar un correo.
             </p>
 
             <ul className="mt-7 space-y-3">
               {number && (
                 <li>
                   <a
-                    href={whatsappLink(number, `Hola ${settings.brandName}, quisiera consultar por una cita.`)}
+                    href={whatsappLink(number, greeting)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-4 rounded-2xl border border-line p-4 transition hover:border-brand-200 hover:bg-blush"
                   >
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#25D366]/12 text-wa">
-                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden="true">
-                        <path d="M12.05 21.5h-.01a9.4 9.4 0 0 1-4.79-1.31l-.34-.2-3.56.93.95-3.47-.22-.36a9.38 9.38 0 0 1-1.44-5.01c0-5.18 4.22-9.4 9.42-9.4a9.35 9.35 0 0 1 6.65 2.76 9.32 9.32 0 0 1 2.76 6.65c0 5.18-4.23 9.41-9.42 9.41Z" />
-                      </svg>
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-wa/10 text-wa">
+                      <WhatsAppIcon className="h-5 w-5" />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-medium text-ink-800">WhatsApp</span>
-                      <span className="block truncate text-sm text-ink-500">{settings.contactPhone}</span>
+                      <span className="block truncate text-sm tabular-nums text-ink-500">{formatCoPhone(number)}</span>
                     </span>
-                    <span className="text-xs font-medium text-brand-700">Abrir</span>
+                    <span className="text-xs font-medium text-brand-700">
+                      Escribir
+                      <span className="sr-only"> (se abre en una pestaña nueva)</span>
+                    </span>
                   </a>
                 </li>
               )}
@@ -106,52 +122,59 @@ export default function ContactSection({ rules = [], compact = false }) {
                       <span className="block text-sm font-medium text-ink-800">Ubicación</span>
                       <span className="block text-sm leading-snug text-ink-500">{settings.addressLine}</span>
                     </span>
-                    <span className="shrink-0 text-xs font-medium text-brand-700">Mapa</span>
+                    <span className="shrink-0 text-xs font-medium text-brand-700">
+                      Mapa
+                      <span className="sr-only"> (se abre en una pestaña nueva)</span>
+                    </span>
                   </a>
                 </li>
               )}
             </ul>
-
-            <div className="mt-7 border-t border-line pt-6">
-              <Button to="/reservar" className="w-full sm:w-auto">
-                Reservar en línea
-              </Button>
-            </div>
           </div>
         </Reveal>
 
         <Reveal delay={0.1} className="card-surface p-6 sm:p-8">
           <h3 className="text-2xl">Horario de atención</h3>
           <p className="mt-2 text-sm leading-relaxed text-ink-500">
-            Solo con cita previa. Estos son los días y las franjas en que atendemos.
+            {hasSchedule
+              ? 'Solo con cita previa. Estos son los días y las franjas en que atiendo.'
+              : 'Solo con cita previa.'}
           </p>
 
-          <dl className="mt-7 divide-y divide-line">
-            {byDay.map((day) => (
-              <div key={day.value} className="flex items-baseline justify-between gap-4 py-3">
-                <dt
-                  className={`text-sm ${day.ranges.length > 0 ? 'font-medium text-ink-800' : 'text-ink-400'}`}
-                >
-                  {day.label}
-                </dt>
-                <dd className="text-right text-sm text-ink-600">
-                  {day.ranges.length > 0 ? (
-                    day.ranges.map((range) => (
-                      <span key={range} className="block tabular-nums">
-                        {range}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-ink-400">Cerrado</span>
-                  )}
-                </dd>
-              </div>
-            ))}
-          </dl>
-
-          {settings.businessHoursNote && (
-            <p className="mt-6 rounded-2xl bg-blush px-4 py-3 text-xs leading-relaxed text-ink-600">
+          {hasSchedule ? (
+            <dl className="mt-7 divide-y divide-line">
+              {byDay.map((day) => (
+                <div key={day.value} className="flex items-baseline justify-between gap-4 py-3">
+                  <dt
+                    className={`text-sm ${day.ranges.length > 0 ? 'font-medium text-ink-800' : 'text-ink-400'}`}
+                  >
+                    {day.label}
+                  </dt>
+                  <dd className="text-right text-sm text-ink-600">
+                    {day.ranges.length > 0 ? (
+                      day.ranges.map((range) => (
+                        <span key={range} className="block tabular-nums">
+                          {range}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-ink-400">Cerrado</span>
+                    )}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : settings.businessHoursNote ? (
+            <p className="mt-6 rounded-2xl bg-blush px-4 py-3 text-sm leading-relaxed text-ink-600">
               {settings.businessHoursNote}
+            </p>
+          ) : loading ? (
+            <p className="mt-6 text-sm text-ink-500" aria-busy="true">
+              Cargando el horario…
+            </p>
+          ) : (
+            <p className="mt-6 text-sm leading-relaxed text-ink-600">
+              Escríbeme y te cuento qué horarios tengo libres.
             </p>
           )}
         </Reveal>

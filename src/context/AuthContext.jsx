@@ -88,6 +88,18 @@ export function AuthProvider({ children }) {
     return data.user;
   }, []);
 
+  /*
+   * El access token lleva el correo dentro, así que el servidor devuelve
+   * uno nuevo al cambiarlo: se reemplaza aquí para que las siguientes
+   * peticiones no viajen con el correo anterior.
+   */
+  const changeEmail = useCallback(async (payload) => {
+    const data = await api.post('/auth/change-email', payload);
+    setAccessToken(data.accessToken);
+    setUser(data.user);
+    return data;
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
@@ -98,8 +110,9 @@ export function AuthProvider({ children }) {
       register,
       logout,
       updateProfile,
+      changeEmail,
     }),
-    [user, loading, login, register, logout, updateProfile],
+    [user, loading, login, register, logout, updateProfile, changeEmail],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

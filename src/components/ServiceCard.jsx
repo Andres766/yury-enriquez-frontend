@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
-import { money, duration, CATEGORY_LABEL } from '../lib/format.js';
+import { duration, priceLabel } from '../lib/format.js';
+import { isSeasonalService, photoProps, visibleImages } from '../lib/catalog.js';
 import { Badge, cx } from './ui/index.jsx';
+import { CheckIcon, StarPlaceholder } from './catalog/icons.jsx';
 
 /**
  * Tarjeta de servicio.
@@ -9,10 +11,21 @@ import { Badge, cx } from './ui/index.jsx';
  * La tarjeta entera es un enlace, pero el nombre del servicio es el
  * texto accesible del enlace (`aria-label` explícito) para que un lector
  * de pantalla no anuncie "enlace, imagen, 85.000 pesos…".
+ *
+ * La foto va en vertical (4:5): las fotos reales son retratos y en una
+ * casilla horizontal se perdían la frente y el mentón. Encima no va
+ * ninguna etiqueta salvo la de temporada, que sí informa algo; la
+ * categoría ya la dice el nombre.
+ *
+ * `occasionSlug` viaja a la ficha (?ocasion=) para que la reserva llegue
+ * con la ocasión ya elegida.
  */
-export default function ServiceCard({ service, index = 0, className }) {
+export default function ServiceCard({ service, index = 0, occasionSlug, className }) {
   const reduced = useReducedMotion();
-  const cover = service.images?.[0];
+  const cover = visibleImages(service.images)[0];
+  const price = priceLabel(service);
+  const highlights = service.includes?.slice(0, 2) ?? [];
+  const href = occasionSlug ? `/servicios/${service.slug}?ocasion=${occasionSlug}` : `/servicios/${service.slug}`;
 
   return (
     <motion.article
@@ -23,16 +36,16 @@ export default function ServiceCard({ service, index = 0, className }) {
       className={cx('group', className)}
     >
       <Link
-        to={`/servicios/${service.slug}`}
+        to={href}
         aria-label={`Ver detalles de ${service.name}`}
         className="flex h-full flex-col overflow-hidden rounded-3xl border border-line bg-surface shadow-soft transition-all duration-300
                    hover:-translate-y-1 hover:border-brand-200 hover:shadow-lift
                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2"
       >
-        <div className="relative aspect-[4/3] overflow-hidden bg-blush">
+        <div className="relative aspect-[4/5] overflow-hidden bg-blush">
           {cover ? (
             <img
-              src={cover.url}
+              {...photoProps(cover.url)}
               alt={cover.alt}
               loading={index < 3 ? 'eager' : 'lazy'}
               decoding="async"
@@ -40,21 +53,15 @@ export default function ServiceCard({ service, index = 0, className }) {
             />
           ) : (
             <div className="flex h-full items-center justify-center text-brand-300" aria-hidden="true">
-              <svg viewBox="0 0 24 24" className="h-12 w-12" fill="none">
-                <path
-                  d="M12 3.5 14.4 9l5.6.5-4.3 3.9 1.3 5.6L12 16l-5 3 1.3-5.6L4 9.5 9.6 9z"
-                  stroke="currentColor"
-                  strokeWidth="1.2"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              <StarPlaceholder />
             </div>
           )}
 
-          <div className="absolute left-4 top-4 flex flex-wrap gap-2">
-            <Badge className="bg-surface/90 backdrop-blur-sm">{CATEGORY_LABEL[service.category]}</Badge>
-            {service.featured && <Badge tone="gold">Destacado</Badge>}
-          </div>
+          {isSeasonalService(service) && (
+            <div className="absolute left-4 top-4">
+              <Badge tone="gold">Temporada</Badge>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-1 flex-col p-5 sm:p-6">
@@ -62,14 +69,26 @@ export default function ServiceCard({ service, index = 0, className }) {
             {service.name}
           </h3>
 
-          <p className="text-pretty mt-2.5 flex-1 text-sm leading-relaxed text-ink-500">
-            {service.shortDescription}
-          </p>
+          {/* Lo que incluye dice más que la frase corta, si Yury lo cargó. */}
+          {highlights.length > 0 ? (
+            <ul className="mt-2.5 flex-1 space-y-1.5">
+              {highlights.map((item) => (
+                <li key={item} className="flex items-start gap-2 text-sm leading-snug text-ink-600">
+                  <CheckIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-500" strokeWidth={1.6} />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-pretty mt-2.5 flex-1 text-sm leading-relaxed text-ink-500">
+              {service.shortDescription}
+            </p>
+          )}
 
           <div className="mt-5 flex items-end justify-between gap-3 border-t border-line pt-4">
             <div>
-              <p className="font-display text-2xl leading-none text-ink-800">
-                {money(service.priceCents, service.currency)}
+              <p className={cx('font-display leading-none text-ink-800', price.isQuote ? 'text-xl' : 'text-2xl')}>
+                {price.text}
               </p>
               <p className="mt-1.5 flex items-center gap-1.5 text-xs text-ink-500">
                 <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" aria-hidden="true">

@@ -1,78 +1,79 @@
-import { Reveal, Button } from '../ui/index.jsx';
+import { Reveal } from '../ui/index.jsx';
 import { useSettings } from '../../context/SettingsContext.jsx';
+import { instagramHandle } from './contactInfo.js';
 
-const PILLARS = [
-  {
-    title: 'Un turno a la vez',
-    text: 'No agendamos dos clientas en paralelo. Tu cita tiene el tiempo que necesita.',
-  },
-  {
-    title: 'Productos profesionales',
-    text: 'Alta duración y resistencia al agua. Higiene estricta entre servicio y servicio.',
-  },
-  {
-    title: 'Look conversado',
-    text: 'Antes de empezar revisamos referencias y hablamos de qué te hace sentir cómoda.',
-  },
-];
+/**
+ * Conoce a Yury.
+ *
+ * La marca es una persona, así que la sección habla de ella y en primera
+ * persona, como el texto que escribe en Panel → Ajustes (`aboutText`).
+ *
+ * Foto: todavía no hay un retrato suyo aparte; la única foto real de
+ * Yury es la de la portada, trabajando. Aquí se usa recortada sobre ella
+ * (no sobre la clienta), que es mejor que una foto de relleno. Cuando
+ * haya retrato, basta con cambiar las rutas de abajo.
+ */
+
+const PORTRAIT = {
+  webp: '/img/hero-yury-640.webp 640w, /img/hero-yury-1084.webp 1084w',
+  jpg: '/img/hero-yury-640.jpg 640w, /img/hero-yury-1084.jpg 1084w',
+  src: '/img/hero-yury-1084.jpg',
+  alt: 'Yury Enríquez en su estudio, con el pincel en la mano',
+  focus: '30% 28%',
+};
 
 export default function AboutStrip() {
   const settings = useSettings();
+  const handle = instagramHandle(settings.instagramUrl);
 
   return (
-    <section className="container-page py-20 sm:py-24" aria-labelledby="sobre-mi">
-      <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+    <section className="container-page py-14 sm:py-20" aria-labelledby="sobre-mi">
+      <div className="grid items-center gap-8 sm:gap-12 lg:grid-cols-2 lg:gap-16">
         <Reveal className="order-2 lg:order-1">
-          <p className="eyebrow">Sobre el estudio</p>
+          <p className="eyebrow">Sobre mí</p>
           <h2 id="sobre-mi" className="text-balance mt-4 text-3xl leading-tight sm:text-4xl">
-            Detrás de cada cita hay una conversación
+            Hola, soy Yury
           </h2>
 
           {settings.aboutText && (
-            <p className="text-pretty mt-6 text-[15px] leading-relaxed text-ink-600 sm:text-base">
+            <p className="text-pretty mt-5 whitespace-pre-line text-[15px] leading-relaxed text-ink-600 sm:text-base">
               {settings.aboutText}
             </p>
           )}
 
-          <ul className="mt-9 space-y-5">
-            {PILLARS.map((pillar) => (
-              <li key={pillar.title} className="flex gap-4">
-                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blush text-brand-600">
-                  <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" aria-hidden="true">
-                    <path d="m3.5 8.4 2.8 2.8 6.2-6.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span>
-                  <span className="block font-medium text-ink-800">{pillar.title}</span>
-                  <span className="mt-1 block text-sm leading-relaxed text-ink-500">{pillar.text}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-
-          <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-            <Button to="/reservar">Reservar cita</Button>
-            <Button to="/contacto" variant="secondary">
-              Cómo llegar
-            </Button>
-          </div>
+          {settings.instagramUrl && (
+            <a
+              href={settings.instagramUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-6 inline-flex min-h-[44px] items-center gap-2 text-sm font-medium text-brand-700 underline decoration-brand-300 underline-offset-4 transition hover:decoration-brand-600"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden="true">
+                <path d="M12 7.6a4.4 4.4 0 1 0 0 8.8 4.4 4.4 0 0 0 0-8.8Zm0 7.25a2.85 2.85 0 1 1 0-5.7 2.85 2.85 0 0 1 0 5.7ZM17.6 7.4a1.03 1.03 0 1 1-2.05 0 1.03 1.03 0 0 1 2.05 0ZM8 3.4h8A4.6 4.6 0 0 1 20.6 8v8a4.6 4.6 0 0 1-4.6 4.6H8A4.6 4.6 0 0 1 3.4 16V8A4.6 4.6 0 0 1 8 3.4Zm0 1.6A3 3 0 0 0 5 8v8a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3V8a3 3 0 0 0-3-3H8Z" />
+              </svg>
+              Ver mi trabajo en Instagram{handle ? ` ${handle}` : ''}
+              <span className="sr-only">(se abre en una pestaña nueva)</span>
+            </a>
+          )}
         </Reveal>
 
-        <Reveal delay={0.12} className="order-1 lg:order-2">
-          <div className="relative">
-            <div className="aspect-[4/5] overflow-hidden rounded-[2.5rem] border border-line bg-blush shadow-lift">
+        <Reveal delay={0.1} className="order-1 lg:order-2">
+          <div className="mx-auto aspect-[4/5] max-w-xs overflow-hidden rounded-[2rem] border border-line bg-blush shadow-lift sm:max-w-sm lg:max-w-none lg:rounded-[2.5rem]">
+            <picture>
+              <source type="image/webp" srcSet={PORTRAIT.webp} sizes="(min-width: 1024px) 45vw, 20rem" />
               <img
-                src="https://picsum.photos/seed/estudio-sobre-mi/900/1125"
-                alt="Espacio del estudio de maquillaje, con tocador e iluminación profesional"
+                src={PORTRAIT.src}
+                srcSet={PORTRAIT.jpg}
+                sizes="(min-width: 1024px) 45vw, 20rem"
+                width="1084"
+                height="1451"
+                alt={PORTRAIT.alt}
                 loading="lazy"
                 decoding="async"
-                className="h-full w-full object-cover"
+                style={{ objectPosition: PORTRAIT.focus }}
+                className="h-full w-full origin-[30%_28%] scale-[1.35] object-cover"
               />
-            </div>
-            <div
-              aria-hidden="true"
-              className="absolute -bottom-6 -left-6 -z-10 h-40 w-40 rounded-full bg-gold-100 blur-2xl"
-            />
+            </picture>
           </div>
         </Reveal>
       </div>

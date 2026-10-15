@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api, ApiError } from '../../lib/api.js';
 import { useToast } from '../../context/ToastContext.jsx';
-import { money, duration, CATEGORY_LABEL } from '../../lib/format.js';
+import { useSettings } from '../../context/SettingsContext.jsx';
+import { duration, priceLabel, CATEGORY_LABEL, PRICE_MODE_LABEL } from '../../lib/format.js';
+import IncludesEditor from '../../components/catalog/IncludesEditor.jsx';
+import PortfolioPicker from '../../components/catalog/PortfolioPicker.jsx';
 import {
   Button, Input, Textarea, Select, Checkbox, Badge, LoadingBlock, EmptyState, Alert, cx,
 } from '../../components/ui/index.jsx';
@@ -20,6 +23,16 @@ const EMPTY = {
   sortOrder: 0,
   images: [],
   occasionIds: [],
+  priceMode: 'FIXED',
+  includes: [],
+  maxAdvanceDays: null,
+};
+
+/** Qué ve la clienta con cada modo, para elegir sin adivinar. */
+const PRICE_MODE_HELP = {
+  FIXED: 'Se muestra el valor exacto y se reserva en línea. Para servicios de valor cerrado.',
+  FROM: 'Se muestra «Desde $…». Para servicios que cambian según el caso (novias, paquetes).',
+  QUOTE: 'No se muestra valor: el botón principal pasa a «Cotizar por WhatsApp» y el calendario queda de segundo.',
 };
 
 export default function ServicesAdmin() {
@@ -121,8 +134,9 @@ export default function ServicesAdmin() {
                 </div>
                 <p className="mt-1 truncate text-sm text-ink-500">{service.shortDescription}</p>
                 <p className="mt-0.5 text-xs text-ink-400">
-                  {money(service.priceCents, service.currency)} · {duration(service.durationMinutes)} ·{' '}
+                  {priceLabel(service).text} · {duration(service.durationMinutes)} ·{' '}
                   {service.images?.length ?? 0} foto(s)
+                  {service.maxAdvanceDays ? ` · reserva hasta ${service.maxAdvanceDays} días` : ''}
                 </p>
               </div>
 
@@ -168,6 +182,7 @@ export default function ServicesAdmin() {
 
 function ServiceForm({ service, occasions, onClose, onSaved }) {
   const toast = useToast();
+  const settings = useSettings();
   const isNew = !service.id;
 
   const [form, setForm] = useState({
@@ -176,6 +191,10 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
     price: (service.priceCents ?? 0) / 100,
     occasionIds: service.occasions?.map((o) => o.id) ?? service.occasionIds ?? [],
     images: service.images?.map(({ url, alt }) => ({ url, alt })) ?? [],
+    priceMode: service.priceMode ?? 'FIXED',
+    includes: service.includes ?? [],
+    // El campo trabaja con texto: vacío = usar el límite general.
+    maxAdvanceDays: service.maxAdvanceDays ?? '',
   });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -204,6 +223,14 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
         : [...f.occasionIds, id],
     }));
 
+  // Tocar una foto de "mis trabajos" la añade; tocarla otra vez la quita.
+  const togglePortfolioImage = ({ url, alt }) =>
+    setForm((f) => {
+      if (f.images.some((img) => img.url === url)) return { ...f, images: f.images.filter((img) => img.url !== url) };
+      if (f.images.length >= 12) return f;
+      return { ...f, images: [...f.images, { url, alt }] };
+    });
+
   const setImage = (index, key, value) =>
     setForm((f) => ({
       ...f,
@@ -228,6 +255,9 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
       sortOrder: Number(form.sortOrder) || 0,
       images: form.images.filter((img) => img.url && img.alt),
       occasionIds: form.occasionIds,
+      priceMode: form.priceMode,
+      includes: form.includes,
+      maxAdvanceDays: form.maxAdvanceDays === '' ? null : Number(form.maxAdvanceDays),
     };
 
     try {
@@ -275,7 +305,7 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
           <button
             type="button"
             onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded-full text-ink-500 transition hover:bg-blush"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-500 transition hover:bg-blush"
             aria-label="Cerrar"
           >
             <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" aria-hidden="true">
@@ -315,7 +345,11 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
               value={form.price}
               onChange={set('price')}
               error={errors.priceCents}
-              hint={`Se mostrará como ${money(Math.round(Number(form.price || 0) * 100))}`}
+              hint={
+                form.priceMode === 'QUOTE'
+                  ? 'En modo cotizar no se muestra: queda como referencia para ti.'
+                  : `Se mostrará como «${priceLabel({ priceMode: form.priceMode, priceCents: Math.round(Number(form.price || 0) * 100) }).text}»`
+              }
             />
             <Input
               label="Duración (minutos)"
@@ -328,6 +362,36 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
               onChange={set('durationMinutes')}
               error={errors.durationMinutes}
               hint={`Equivale a ${duration(Number(form.durationMinutes) || 0)}`}
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Select
+              label="Cómo se muestra el precio"
+              required
+              value={form.priceMode}
+              onChange={set('priceMode')}
+              error={errors.priceMode}
+              hint={PRICE_MODE_HELP[form.priceMode]}
+            >
+              {Object.entries(PRICE_MODE_LABEL).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+
+            <Input
+              label="Reservar en línea con hasta (días)"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={730}
+              value={form.maxAdvanceDays}
+              onChange={set('maxAdvanceDays')}
+              error={errors.maxAdvanceDays}
+              placeholder={String(settings.maxAdvanceDays)}
+              hint={`Vacío = lo general de Ajustes (${settings.maxAdvanceDays} días). Las novias suelen separar con 6 a 12 meses: 365 deja ver todo el año.`}
             />
           </div>
 
@@ -353,26 +417,46 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
             hint="Deja una línea en blanco entre párrafos."
           />
 
+          <IncludesEditor
+            label="Qué incluye"
+            items={form.includes}
+            onChange={(includes) => {
+              setForm((f) => ({ ...f, includes }));
+              setErrors((e) => (e.includes ? { ...e, includes: undefined } : e));
+            }}
+            error={errors.includes ?? Object.entries(errors).find(([k, v]) => k.startsWith('includes.') && v)?.[1]}
+            placeholder="Ej.: Pestañas postizas"
+            hint="Frases cortas, una por fila. Se ven como lista en la ficha y las dos primeras en la tarjeta. Pon solo lo que de verdad trae este servicio."
+          />
+
           {/* Galería */}
           <fieldset>
+            {/* La leyenda tiene que ser el primer hijo del fieldset (igual
+                que en «Qué incluye»); la visible va junto al botón. */}
+            <legend className="sr-only">Galería de fotos</legend>
             <div className="mb-2 flex items-center justify-between">
-              <legend className="label-base mb-0">Galería de fotos</legend>
+              <p className="label-base mb-0" aria-hidden="true">Galería de fotos</p>
               <button
                 type="button"
                 onClick={() => setForm((f) => ({ ...f, images: [...f.images, { url: '', alt: '' }] }))}
                 disabled={form.images.length >= 12}
-                className="text-xs font-medium text-brand-700 transition hover:underline disabled:text-ink-400"
+                className="min-h-[44px] text-xs font-medium text-brand-700 transition hover:underline disabled:text-ink-400"
               >
                 + Añadir foto
               </button>
             </div>
 
+            <PortfolioPicker
+              selected={form.images.map((img) => img.url)}
+              onPick={togglePortfolioImage}
+            />
+
             {form.images.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-line p-4 text-sm text-ink-400">
+              <p className="mt-2 rounded-xl border border-dashed border-line p-4 text-sm text-ink-400">
                 Sin fotos todavía. Añade al menos una: el catálogo entra mucho mejor con imagen.
               </p>
             ) : (
-              <ul className="space-y-3">
+              <ul className="mt-2 space-y-3">
                 {form.images.map((image, index) => (
                   <li key={index} className="rounded-xl border border-line p-3">
                     <div className="flex gap-3">
@@ -388,7 +472,8 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
                       )}
                       <div className="min-w-0 flex-1 space-y-2">
                         <input
-                          type="url"
+                          type="text"
+                          inputMode="url"
                           value={image.url}
                           onChange={(e) => setImage(index, 'url', e.target.value)}
                           placeholder="https://… o /ruta-local.jpg"
@@ -408,7 +493,7 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
                       <button
                         type="button"
                         onClick={() => setForm((f) => ({ ...f, images: f.images.filter((_, i) => i !== index) }))}
-                        className="h-8 w-8 shrink-0 rounded-lg text-ink-400 transition hover:bg-red-50 hover:text-red-700"
+                        className="h-11 w-11 shrink-0 rounded-lg text-ink-400 transition hover:bg-red-50 hover:text-red-700"
                         aria-label={`Quitar foto ${index + 1}`}
                       >
                         ✕
@@ -419,8 +504,8 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
               </ul>
             )}
             <p className="hint-text">
-              El texto alternativo describe la imagen para quien usa lector de pantalla. Las fotos sin
-              descripción no se guardan.
+              La primera foto es la portada de la tarjeta. Van en vertical (4:5). El texto alternativo
+              describe la imagen para quien usa lector de pantalla; las fotos sin descripción no se guardan.
             </p>
           </fieldset>
 
@@ -448,6 +533,10 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
                 );
               })}
             </div>
+            <p className="hint-text">
+              Si el servicio es para Bodas (o solo para Quinceañeros), en su ficha el botón principal es «Separar mi
+              fecha por WhatsApp» y el calendario queda de segundo, aunque el precio sea fijo.
+            </p>
           </fieldset>
 
           <div className="flex flex-wrap gap-6 border-t border-line pt-5">
@@ -455,7 +544,7 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
             <Checkbox label="Destacado en la portada" checked={form.featured} onChange={set('featured')} />
           </div>
 
-          {Object.keys(errors).length > 0 && (
+          {Object.values(errors).some(Boolean) && (
             <Alert tone="error">Hay campos con errores. Revísalos antes de guardar.</Alert>
           )}
         </form>

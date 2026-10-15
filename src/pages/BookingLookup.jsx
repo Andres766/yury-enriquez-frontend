@@ -3,8 +3,10 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { api, ApiError } from '../lib/api.js';
 import { useSettings } from '../context/SettingsContext.jsx';
-import { money, longDate, time, duration, STATUS_LABEL, STATUS_TONE, PAYMENT_LABEL, whatsappLink } from '../lib/format.js';
+import { longDate, time, duration, STATUS_LABEL, STATUS_TONE, PAYMENT_LABEL, priceLabel } from '../lib/format.js';
 import { Button, Input, SectionTitle, Alert, cx } from '../components/ui/index.jsx';
+import { WhatsAppButtonLink } from '../components/booking/WhatsAppAction.jsx';
+import { capFirst, ownerFirstName } from '../components/booking/bookingHelpers.js';
 
 /**
  * Consulta de reserva para invitadas.
@@ -12,6 +14,10 @@ import { Button, Input, SectionTitle, Alert, cx } from '../components/ui/index.j
  * Pide código Y correo. Solo con el código no basta: así nadie puede
  * probar combinaciones y leer los datos personales de otra clienta.
  * El endpoint además está limitado en número de intentos.
+ *
+ * Mientras una reserva por transferencia siga pendiente, aquí se
+ * repiten los datos de pago y el botón para mandar el comprobante:
+ * muchas clientas vuelven a esta página justo para eso.
  */
 export default function BookingLookup() {
   const [searchParams] = useSearchParams();
@@ -51,6 +57,11 @@ export default function BookingLookup() {
 
   const serviceEnd = booking
     ? new Date(new Date(booking.startAt).getTime() + booking.service.durationMinutes * 60_000)
+    : null;
+  const first = ownerFirstName(settings);
+  const awaitingTransfer = booking?.status === 'PENDING' && booking.paymentMethod === 'TRANSFERENCIA';
+  const price = booking
+    ? priceLabel({ ...booking.service, priceCents: booking.priceCents, currency: booking.currency })
     : null;
 
   return (
@@ -125,10 +136,10 @@ export default function BookingLookup() {
                 ['Servicio', booking.service.name],
                 ['Duración', duration(booking.service.durationMinutes)],
                 ['Ocasión', booking.occasion?.name],
-                ['Fecha', longDate(booking.startAt, settings.timezone)],
+                ['Fecha', capFirst(longDate(booking.startAt, settings.timezone))],
                 ['Hora', `${time(booking.startAt, settings.timezone)} – ${time(serviceEnd, settings.timezone)}`],
                 ['Medio de pago', PAYMENT_LABEL[booking.paymentMethod]],
-                ['Valor', money(booking.priceCents, booking.currency)],
+                [price.mode === 'FROM' ? 'Valor estimado' : 'Valor', price.text],
                 ['A nombre de', booking.customerName],
                 ['Notas', booking.notes],
               ]
@@ -136,10 +147,32 @@ export default function BookingLookup() {
                 .map(([label, value]) => (
                   <div key={label} className="flex flex-wrap justify-between gap-x-6 gap-y-1">
                     <dt className="text-ink-500">{label}</dt>
-                    <dd className="max-w-[60%] text-right font-medium capitalize text-ink-800">{value}</dd>
+                    <dd className="max-w-[60%] break-words text-right font-medium text-ink-800">{value}</dd>
                   </div>
                 ))}
             </dl>
+
+            {awaitingTransfer && (
+              <div className="border-t border-line px-6 py-5">
+                {settings.transferInstructions && (
+                  <div className="mb-4 rounded-2xl bg-blush p-4">
+                    <p className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-brand-700">
+                      Datos para la transferencia
+                    </p>
+                    <p className="whitespace-pre-line text-sm leading-relaxed text-ink-600">
+                      {settings.transferInstructions}
+                    </p>
+                  </div>
+                )}
+                <WhatsAppButtonLink
+                  variant="primary"
+                  className="w-full"
+                  message={`Hola ${first}, te envío el comprobante de mi reserva ${booking.code} (${booking.service.name}, ${longDate(booking.startAt, settings.timezone)} a las ${time(booking.startAt, settings.timezone)}).`}
+                >
+                  Enviar comprobante por WhatsApp
+                </WhatsAppButtonLink>
+              </div>
+            )}
 
             {booking.status === 'CANCELLED' ? (
               <div className="border-t border-line px-6 py-5">
@@ -156,18 +189,13 @@ export default function BookingLookup() {
                 <p className="mb-4 text-sm leading-relaxed text-ink-500">
                   ¿Necesitas cambiar la fecha o cancelar? Escríbenos por WhatsApp y lo resolvemos.
                 </p>
-                <Button
-                  href={whatsappLink(
-                    settings.whatsappNumber || settings.contactPhone,
-                    `Hola, quisiera modificar mi reserva ${booking.code}.`,
-                  )}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <WhatsAppButtonLink
                   variant="secondary"
                   className="w-full"
+                  message={`Hola ${first}, quisiera modificar mi reserva ${booking.code}.`}
                 >
                   Escribir por WhatsApp
-                </Button>
+                </WhatsAppButtonLink>
               </div>
             )}
           </motion.div>

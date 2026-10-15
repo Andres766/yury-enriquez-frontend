@@ -5,12 +5,13 @@ import { api, qs } from '../../lib/api.js';
 import { useSettings } from '../../context/SettingsContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import {
-  money, longDate, time, shortDate, duration, toDateISO,
+  longDate, time, shortDate, duration, toDateISO, priceLabel,
   STATUS_LABEL, STATUS_TONE, PAYMENT_LABEL, whatsappLink, WEEKDAYS,
 } from '../../lib/format.js';
 import {
   Button, Input, Select, Textarea, Badge, Alert, LoadingBlock, EmptyState, Spinner, cx,
 } from '../../components/ui/index.jsx';
+import { capFirst, displayPhone } from '../../components/booking/bookingHelpers.js';
 
 /**
  * Gestión de reservas.
@@ -18,7 +19,15 @@ import {
  * Dos vistas sobre los mismos datos: listado filtrable (lo que se usa
  * para trabajar) y calendario semanal (lo que se usa para ver de un
  * vistazo cómo viene la semana).
+ *
+ * El enlace de WhatsApp de cada clienta pasa por `whatsappLink`, que le
+ * pone el +57 a los celulares guardados sin indicativo (las reservas
+ * antiguas): sin eso wa.me abría un número de Grecia.
  */
+
+/** Precio guardado en la reserva, con el modo del servicio ("Desde…"). */
+const bookingPrice = (booking) =>
+  priceLabel({ ...booking.service, priceCents: booking.priceCents, currency: booking.currency });
 
 const STATUSES = ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'NO_SHOW'];
 
@@ -242,19 +251,21 @@ function BookingList({ items, settings, onSelect }) {
               <div className="flex flex-wrap items-center gap-2">
                 <p className="font-medium text-ink-800">{booking.customerName}</p>
                 {!booking.userId && <Badge tone="outline">Invitada</Badge>}
+                {booking.source && (
+                  // Un ref largo sin espacios no debe desbordar la fila en el celular.
+                  <Badge tone="outline" className="max-w-full break-all">Vino de {booking.source}</Badge>
+                )}
               </div>
               <p className="mt-0.5 truncate text-sm text-ink-500">{booking.service.name}</p>
               <p className="mt-0.5 text-xs text-ink-400">
-                {time(booking.startAt, settings.timezone)} · {booking.customerPhone} ·{' '}
+                {time(booking.startAt, settings.timezone)} · {displayPhone(booking.customerPhone)} ·{' '}
                 {PAYMENT_LABEL[booking.paymentMethod]}
               </p>
             </div>
 
             <div className="flex items-center gap-3">
               <div className="text-right">
-                <p className="font-display text-lg text-ink-800">
-                  {money(booking.priceCents, booking.currency)}
-                </p>
+                <p className="font-display text-lg text-ink-800">{bookingPrice(booking).short}</p>
                 <p className="font-mono text-[10px] tracking-wider text-ink-400">{booking.code}</p>
               </div>
               <span className={cx('rounded-full border px-2.5 py-1 text-[11px] font-medium', STATUS_TONE[booking.status])}>
@@ -460,17 +471,19 @@ function BookingDrawer({ booking, settings, onClose, onAct }) {
               ['Servicio', booking.service.name],
               ['Duración', duration(booking.service.durationMinutes)],
               ['Ocasión', booking.occasion?.name],
-              ['Fecha', longDate(booking.startAt, settings.timezone)],
+              ['Fecha', capFirst(longDate(booking.startAt, settings.timezone))],
               ['Hora', `${time(booking.startAt, settings.timezone)} – ${time(serviceEnd, settings.timezone)}`],
-              ['Valor', money(booking.priceCents, booking.currency)],
+              ['Valor', bookingPrice(booking).text],
               ['Pago', PAYMENT_LABEL[booking.paymentMethod]],
               ['Tipo', booking.userId ? 'Clienta registrada' : 'Invitada (sin cuenta)'],
+              // utm_source / ref del enlace por el que llegó (Instagram, campaña…).
+              ['Origen', booking.source],
             ]
               .filter(([, v]) => v)
               .map(([label, value]) => (
                 <div key={label} className="flex justify-between gap-4">
                   <dt className="text-ink-500">{label}</dt>
-                  <dd className="text-right font-medium capitalize text-ink-800">{value}</dd>
+                  <dd className="break-words text-right font-medium text-ink-800">{value}</dd>
                 </div>
               ))}
           </dl>
@@ -482,7 +495,7 @@ function BookingDrawer({ booking, settings, onClose, onAct }) {
               rel="noopener noreferrer"
               className="flex items-center justify-between gap-2 font-medium text-wa hover:underline"
             >
-              {booking.customerPhone}
+              {displayPhone(booking.customerPhone)}
               <span className="text-xs">WhatsApp →</span>
             </a>
             <a href={`mailto:${booking.customerEmail}`} className="block truncate text-brand-700 hover:underline">

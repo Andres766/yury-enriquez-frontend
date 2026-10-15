@@ -1,7 +1,11 @@
 import { motion, useReducedMotion } from 'framer-motion';
-import { Badge, Button, Reveal, SectionTitle } from '../ui/index.jsx';
-import { money, mediumDate } from '../../lib/format.js';
+import { Link } from 'react-router-dom';
+import { Badge, Reveal, SectionTitle } from '../ui/index.jsx';
+import { money, mediumDate, whatsappLink } from '../../lib/format.js';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { useSettings } from '../../context/SettingsContext.jsx';
+import WhatsAppIcon from './WhatsAppIcon.jsx';
+import { firstName } from './contactInfo.js';
 
 /**
  * Promociones vigentes.
@@ -9,24 +13,32 @@ import { useAuth } from '../../context/AuthContext.jsx';
  * Las marcadas "solo para registradas" ni siquiera llegan del servidor
  * si no hay sesión; el bloque de invitación a registrarse se muestra
  * para que se entienda que existen.
+ *
+ * Cada tarjeta lleva su botón para preguntar por WhatsApp con el nombre
+ * de la promoción ya escrito: varias son de grupo o tienen condiciones
+ * que el asistente en línea no puede reservar solo.
  */
 export default function PromoStrip({ promotions = [] }) {
   const reduced = useReducedMotion();
   const { isAuthenticated } = useAuth();
+  const settings = useSettings();
+  const number = settings.whatsappNumber || settings.contactPhone;
 
   if (promotions.length === 0) return null;
 
   const discountLabel = (promo) =>
-    promo.discountType === 'PERCENT' ? `${promo.discountValue}% off` : `${money(promo.discountValue)} off`;
+    promo.discountType === 'PERCENT'
+      ? `${promo.discountValue} % de descuento`
+      : `Ahorra ${money(promo.discountValue)}`;
 
   return (
-    <section className="veil border-y border-line py-20 sm:py-24" aria-labelledby="titulo-promos">
+    <section className="veil border-y border-line py-14 sm:py-20" aria-labelledby="titulo-promos">
       <div className="container-page">
         <SectionTitle
           eyebrow="Promociones"
           title="Lo que está vigente ahora"
           subtitle="Dinámicas y descuentos por temporada. Se aplican al agendar, mencionándolos en las notas de tu reserva."
-          className="mb-14"
+          className="mb-8 sm:mb-12"
           as="h2"
         />
         <span id="titulo-promos" className="sr-only">
@@ -43,11 +55,6 @@ export default function PromoStrip({ promotions = [] }) {
               transition={{ duration: 0.55, delay: Math.min(i * 0.08, 0.3) }}
               className="relative flex flex-col overflow-hidden rounded-3xl border border-line bg-surface p-6 shadow-soft"
             >
-              <span
-                aria-hidden="true"
-                className="absolute right-0 top-0 h-24 w-24 translate-x-8 -translate-y-8 rounded-full bg-gold-100/80 blur-xl"
-              />
-
               <div className="relative flex flex-wrap items-center gap-2">
                 <Badge tone="gold">{discountLabel(promo)}</Badge>
                 {promo.membersOnly && <Badge tone="dark">Solo registradas</Badge>}
@@ -66,6 +73,22 @@ export default function PromoStrip({ promotions = [] }) {
                   </span>
                 )}
               </div>
+
+              {number && (
+                <a
+                  href={whatsappLink(
+                    number,
+                    `Hola ${firstName(settings.brandName)}, quiero preguntar por la promoción «${promo.title}».`,
+                  )}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="relative mt-4 inline-flex min-h-[44px] items-center gap-2 self-start text-sm font-medium text-brand-700 underline decoration-brand-300 underline-offset-4 transition hover:decoration-brand-600"
+                >
+                  <WhatsAppIcon className="h-4 w-4 text-wa" />
+                  Preguntar por esta promo
+                  <span className="sr-only">por WhatsApp (se abre en una pestaña nueva)</span>
+                </a>
+              )}
             </motion.li>
           ))}
         </ul>
@@ -82,9 +105,14 @@ export default function PromoStrip({ promotions = [] }) {
                 Hay promociones reservadas para clientas registradas, además de la tarjeta de fidelidad.
                 Crear la cuenta es gratis y no es necesario para reservar.
               </p>
-              <Button to="/registro" variant="secondary" className="shrink-0">
+              {/* Enlace y no botón: la cuenta es opcional y no debe pesar
+                  más que la reserva. */}
+              <Link
+                to="/registro"
+                className="inline-flex min-h-[44px] shrink-0 items-center text-sm font-medium text-brand-700 underline decoration-brand-300 underline-offset-4 transition hover:decoration-brand-600"
+              >
                 Crear cuenta
-              </Button>
+              </Link>
             </div>
           </Reveal>
         )}

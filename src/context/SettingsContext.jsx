@@ -1,12 +1,21 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
 
 /**
  * Datos del negocio (marca, contacto, redes, zona horaria, tema).
  *
- * Se piden una sola vez al arrancar. Los valores por defecto evitan que
- * la interfaz aparezca vacía durante la carga o si la API no responde.
+ * Se piden al arrancar y se vuelven a pedir:
+ *   · cuando el panel guarda cambios (`reload()`), para que la web
+ *     abierta en la misma pestaña no siga mostrando lo anterior: antes,
+ *     al quitar Halloween, la decoración seguía puesta hasta recargar;
+ *   · cuando la pestaña vuelve a estar visible tras un rato, para que
+ *     una pestaña abierta desde la víspera recoja el tema de temporada
+ *     que empezó a medianoche.
+ * Los valores por defecto evitan que la interfaz aparezca vacía durante
+ * la carga o si la API no responde.
  */
+
+const STALE_AFTER_MS = 5 * 60 * 1000;
 
 const FALLBACK = {
   brandName: 'Yury Enríquez',
@@ -68,33 +77,51 @@ export const SettingsContext = createContext(FALLBACK);
 
 export function SettingsProvider({ children }) {
   const [settings, setSettings] = useState(FALLBACK);
+  const mounted = useRef(true);
+  const fetchedAt = useRef(0);
 
-  useEffect(() => {
-    let cancelled = false;
-    api
+  const reload = useCallback(() => {
+    fetchedAt.current = Date.now();
+    return api
       .get('/settings')
       .then((data) => {
-        if (!cancelled && data?.settings) setSettings({ ...FALLBACK, ...data.settings, loaded: true });
+        if (mounted.current && data?.settings) setSettings({ ...FALLBACK, ...data.settings, loaded: true });
       })
       .catch(() => {
-        // Se mantienen los valores por defecto, pero se marca como
+        // Se mantienen los valores que hubiera, pero se marca como
         // cargado para que la pantalla de entrada no espere en vano.
-        if (!cancelled) setSettings((prev) => ({ ...prev, loaded: true }));
+        if (mounted.current) setSettings((prev) => ({ ...prev, loaded: true }));
       });
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    mounted.current = true;
+    reload();
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && Date.now() - fetchedAt.current > STALE_AFTER_MS) reload();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      mounted.current = false;
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [reload]);
 
   useEffect(() => {
     applyTheme(settings.theme);
   }, [settings.theme]);
 
   useEffect(() => {
-    document.title = `${settings.brandName} · ${settings.tagline}`;
-  }, [settings.brandName, settings.tagline]);
+    // Igual que el <title> de index.html: «Maquilladora profesional en
+    // Pasto» es lo que la gente busca; el tagline en inglés no ayuda.
+    document.title = `${settings.brandName} · Maquilladora profesional en Pasto`;
+  }, [settings.brandName]);
 
-  return <SettingsContext.Provider value={settings}>{children}</SettingsContext.Provider>;
+  const value = useMemo(() => ({ ...settings, reload }), [settings, reload]);
+
+  return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }
 
 export { FALLBACK as DEFAULT_SETTINGS };

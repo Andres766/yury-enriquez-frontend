@@ -21,7 +21,7 @@ const TABS = [
 ];
 
 export default function Account() {
-  const { user, updateProfile } = useAuth();
+  const { user, isAdmin, updateProfile, changeEmail } = useAuth();
   const settings = useSettings();
   const toast = useToast();
 
@@ -172,7 +172,7 @@ export default function Account() {
       {/* Perfil */}
       {tab === 'perfil' && (
         <div role="tabpanel" id="panel-perfil" aria-labelledby="tab-perfil" tabIndex={0} className="focus:outline-none">
-          <ProfileForm user={user} onSave={updateProfile} />
+          <ProfileForm user={user} isAdmin={isAdmin} onSave={updateProfile} onChangeEmail={changeEmail} />
         </div>
       )}
     </div>
@@ -241,7 +241,7 @@ function BookingRow({ booking, timezone, onCancel, highlight }) {
   );
 }
 
-function ProfileForm({ user, onSave }) {
+function ProfileForm({ user, isAdmin, onSave, onChangeEmail }) {
   const toast = useToast();
   const [form, setForm] = useState({
     fullName: user.fullName,
@@ -310,7 +310,13 @@ function ProfileForm({ user, onSave }) {
           placeholder="+57 300 123 4567"
         />
 
-        <Input label="Correo electrónico" value={user.email} disabled readOnly hint="El correo no se puede cambiar desde aquí." />
+        <Input
+          label="Correo electrónico"
+          value={user.email}
+          disabled
+          readOnly
+          hint="Para cambiarlo usa el recuadro «Cambiar correo»."
+        />
 
         <Checkbox
           label="Recibir promociones y dinámicas"
@@ -322,6 +328,8 @@ function ProfileForm({ user, onSave }) {
           Guardar cambios
         </Button>
       </form>
+
+      <EmailForm user={user} isAdmin={isAdmin} onSubmit={onChangeEmail} />
 
       <form onSubmit={changePassword} noValidate className="card-surface space-y-5 p-6">
         <h2 className="text-xl">Cambiar contraseña</h2>
@@ -355,5 +363,112 @@ function ProfileForm({ user, onSave }) {
         </Button>
       </form>
     </div>
+  );
+}
+
+/**
+ * Cambio del correo con el que se inicia sesión.
+ *
+ * No hay verificación por correo ni recuperación de contraseña, así que
+ * un error de tipeo dejaría a la persona fuera de su cuenta: por eso se
+ * pide escribirlo dos veces. La comparación es solo una comodidad; el
+ * servidor vuelve a validar el formato y exige la contraseña actual.
+ */
+function EmailForm({ user, isAdmin, onSubmit }) {
+  const toast = useToast();
+  const [form, setForm] = useState({ newEmail: '', confirmEmail: '', currentPassword: '' });
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  const set = (key) => (event) => {
+    setForm((f) => ({ ...f, [key]: event.target.value }));
+    setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e));
+  };
+
+  async function submit(event) {
+    event.preventDefault();
+
+    const normalized = (v) => v.trim().toLowerCase();
+    if (!form.newEmail.trim()) {
+      setErrors({ newEmail: 'Escribe el correo nuevo' });
+      return;
+    }
+    if (normalized(form.newEmail) !== normalized(form.confirmEmail)) {
+      setErrors({ confirmEmail: 'Los dos correos no coinciden' });
+      return;
+    }
+
+    setSaving(true);
+    setErrors({});
+    try {
+      const result = await onSubmit({ newEmail: form.newEmail, currentPassword: form.currentPassword });
+      toast.success(result.message);
+      setForm({ newEmail: '', confirmEmail: '', currentPassword: '' });
+    } catch (error) {
+      if (error instanceof ApiError && error.details?.length) setErrors(error.fieldErrors);
+      toast.error(error.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} noValidate className="card-surface space-y-5 p-6">
+      <h2 className="text-xl">Cambiar correo</h2>
+      <p className="text-xs leading-relaxed text-ink-500">
+        Es el correo con el que inicias sesión. Ahora es{' '}
+        <span className="break-all font-medium text-ink-700">{user.email}</span>. Usa uno que revises de
+        verdad. Al cambiarlo se cierran tus sesiones en otros equipos; en este sigues dentro.
+      </p>
+
+      {isAdmin && (
+        <Alert tone="info">
+          Este cambio es solo para entrar al panel. Las reservas nuevas se avisan al{' '}
+          <Link to="/admin/ajustes" className="font-medium underline underline-offset-2">
+            correo para avisos de Ajustes
+          </Link>
+          , que va aparte.
+        </Alert>
+      )}
+
+      <Input
+        label="Correo nuevo"
+        type="email"
+        required
+        autoComplete="email"
+        inputMode="email"
+        value={form.newEmail}
+        onChange={set('newEmail')}
+        error={errors.newEmail}
+        maxLength={254}
+      />
+
+      <Input
+        label="Repite el correo nuevo"
+        type="email"
+        required
+        autoComplete="off"
+        inputMode="email"
+        value={form.confirmEmail}
+        onChange={set('confirmEmail')}
+        error={errors.confirmEmail}
+        maxLength={254}
+        hint="Escríbelo otra vez para evitar errores de tipeo."
+      />
+
+      <Input
+        label="Contraseña actual"
+        type="password"
+        required
+        autoComplete="current-password"
+        value={form.currentPassword}
+        onChange={set('currentPassword')}
+        error={errors.currentPassword}
+      />
+
+      <Button type="submit" variant="secondary" loading={saving} className="w-full">
+        Actualizar correo
+      </Button>
+    </form>
   );
 }

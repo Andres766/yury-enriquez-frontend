@@ -239,94 +239,101 @@ function PromotionForm({ promotion, onClose, onSaved }) {
         aria-hidden="true"
       />
 
-      <motion.div
-        role="dialog"
-        aria-modal="true"
-        aria-label={isNew ? 'Crear promoción' : 'Editar promoción'}
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 16 }}
-        className="fixed inset-x-4 top-1/2 z-50 mx-auto max-h-[88vh] w-auto max-w-xl -translate-y-1/2 overflow-y-auto rounded-[2rem] border border-line bg-surface p-6 shadow-lift sm:inset-x-0"
-      >
-        <h2 className="mb-5 font-display text-2xl text-ink-800">
-          {isNew ? 'Nueva promoción' : 'Editar promoción'}
-        </h2>
+      {/*
+        Centrado con un contenedor flex y no con -translate-y-1/2: framer-motion
+        escribe su propio transform al animar `y` y anulaba el centrado, dejando
+        el modal medio fuera de la pantalla (y Guardar inalcanzable en el celular).
+      */}
+      <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
+        <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-label={isNew ? 'Crear promoción' : 'Editar promoción'}
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 16 }}
+          className="pointer-events-auto max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-[2rem] border border-line bg-surface p-6 shadow-lift"
+        >
+          <h2 className="mb-5 font-display text-2xl text-ink-800">
+            {isNew ? 'Nueva promoción' : 'Editar promoción'}
+          </h2>
 
-        <form onSubmit={submit} noValidate className="space-y-5">
-          <Input label="Título" required value={form.title} onChange={set('title')} error={errors.title} maxLength={120} />
+          <form onSubmit={submit} noValidate className="space-y-5">
+            <Input label="Título" required value={form.title} onChange={set('title')} error={errors.title} maxLength={120} />
 
-          <Textarea
-            label="Descripción"
-            required
-            rows={3}
-            maxLength={1000}
-            value={form.description}
-            onChange={set('description')}
-            error={errors.description}
-          />
+            <Textarea
+              label="Descripción"
+              required
+              rows={3}
+              maxLength={1000}
+              value={form.description}
+              onChange={set('description')}
+              error={errors.description}
+            />
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Select label="Tipo de descuento" value={form.discountType} onChange={set('discountType')}>
-              <option value="PERCENT">Porcentaje</option>
-              <option value="AMOUNT">Monto fijo</option>
-            </Select>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Select label="Tipo de descuento" value={form.discountType} onChange={set('discountType')}>
+                <option value="PERCENT">Porcentaje</option>
+                <option value="AMOUNT">Monto fijo</option>
+              </Select>
+
+              <Input
+                label={form.discountType === 'PERCENT' ? 'Porcentaje (%)' : 'Monto (pesos)'}
+                type="number"
+                required
+                min={0}
+                max={form.discountType === 'PERCENT' ? 100 : undefined}
+                value={form.discountValue}
+                onChange={set('discountValue')}
+                error={errors.discountValue}
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input label="Empieza" type="date" required value={form.startsAt} onChange={set('startsAt')} error={errors.startsAt} />
+              <Input label="Termina" type="date" required value={form.endsAt} onChange={set('endsAt')} error={errors.endsAt} />
+            </div>
 
             <Input
-              label={form.discountType === 'PERCENT' ? 'Porcentaje (%)' : 'Monto (pesos)'}
-              type="number"
-              required
-              min={0}
-              max={form.discountType === 'PERCENT' ? 100 : undefined}
-              value={form.discountValue}
-              onChange={set('discountValue')}
-              error={errors.discountValue}
+              label="Código promocional"
+              value={form.code}
+              onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
+              error={errors.code}
+              placeholder="GRADOS15"
+              maxLength={24}
+              hint="Opcional. Solo letras, números y guiones."
             />
-          </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input label="Empieza" type="date" required value={form.startsAt} onChange={set('startsAt')} error={errors.startsAt} />
-            <Input label="Termina" type="date" required value={form.endsAt} onChange={set('endsAt')} error={errors.endsAt} />
-          </div>
-
-          <Input
-            label="Código promocional"
-            value={form.code}
-            onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
-            error={errors.code}
-            placeholder="GRADOS15"
-            maxLength={24}
-            hint="Opcional. Solo letras, números y guiones."
-          />
-
-          <Input
-            label="Imagen"
-            type="url"
-            value={form.image}
-            onChange={set('image')}
-            error={errors.image}
-            placeholder="https://…"
-          />
-
-          <div className="flex flex-wrap gap-6 border-t border-line pt-5">
-            <Checkbox label="Activa" checked={form.active} onChange={set('active')} />
-            <Checkbox
-              label="Solo para clientas registradas"
-              description="No se muestra a quien no tiene sesión iniciada."
-              checked={form.membersOnly}
-              onChange={set('membersOnly')}
+            <Input
+              label="Imagen"
+              type="url"
+              value={form.image}
+              onChange={set('image')}
+              error={errors.image}
+              placeholder="https://…"
             />
-          </div>
 
-          <div className="flex gap-3 border-t border-line pt-5">
-            <Button type="button" variant="ghost" onClick={onClose} className="flex-1 sm:flex-none">
-              Cancelar
-            </Button>
-            <Button type="submit" loading={saving} className="flex-1">
-              {isNew ? 'Crear' : 'Guardar'}
-            </Button>
-          </div>
-        </form>
-      </motion.div>
+            <div className="flex flex-wrap gap-6 border-t border-line pt-5">
+              <Checkbox label="Activa" checked={form.active} onChange={set('active')} />
+              <Checkbox
+                label="Solo para clientas registradas"
+                description="No se muestra a quien no tiene sesión iniciada."
+                checked={form.membersOnly}
+                onChange={set('membersOnly')}
+              />
+            </div>
+
+            <div className="flex gap-3 border-t border-line pt-5">
+              <Button type="button" variant="ghost" onClick={onClose} className="flex-1 sm:flex-none">
+                Cancelar
+              </Button>
+              <Button type="submit" loading={saving} className="flex-1">
+                {isNew ? 'Crear' : 'Guardar'}
+              </Button>
+            </div>
+          </form>
+        </motion.div>
+      </div>
     </>
   );
 }
