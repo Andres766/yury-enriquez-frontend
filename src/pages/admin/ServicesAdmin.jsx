@@ -6,7 +6,8 @@ import { useSettings } from '../../context/SettingsContext.jsx';
 import { duration, priceLabel, seasonText, toDateISO, CATEGORY_LABEL, PRICE_MODE_LABEL } from '../../lib/format.js';
 import { seasonIsOver } from '../../lib/catalog.js';
 import IncludesEditor from '../../components/catalog/IncludesEditor.jsx';
-import PortfolioPicker from '../../components/catalog/PortfolioPicker.jsx';
+import ServiceImagesEditor, { imageKey } from '../../components/admin/ServiceImagesEditor.jsx';
+import { imageSources } from '../../lib/images.js';
 import {
   Button, Input, Textarea, Select, Checkbox, Badge, LoadingBlock, EmptyState, Alert, cx,
 } from '../../components/ui/index.jsx';
@@ -118,9 +119,11 @@ export default function ServicesAdmin() {
             >
               {service.images?.[0] ? (
                 <img
-                  src={service.images[0].url}
+                  {...imageSources(service.images[0].url, { widths: [160, 320], fallback: 320 })}
+                  sizes="4rem"
                   alt=""
-                  className="h-16 w-16 shrink-0 rounded-xl object-cover"
+                  style={{ objectPosition: service.images[0].focus || undefined }}
+                  className="h-16 w-16 shrink-0 rounded-xl bg-blush object-cover"
                   loading="lazy"
                 />
               ) : (
@@ -154,7 +157,9 @@ export default function ServicesAdmin() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              {/* En el celular los botones bajan a su propia fila: al lado
+                  del texto lo dejaban en una columna de pocas letras. */}
+              <div className="flex w-full items-center justify-end gap-2 border-t border-line pt-3 sm:w-auto sm:border-0 sm:pt-0">
                 <Button size="sm" variant="ghost" onClick={() => toggleActive(service)}>
                   {service.active ? 'Ocultar' : 'Publicar'}
                 </Button>
@@ -204,7 +209,8 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
     // El formulario trabaja en pesos; el backend guarda centavos.
     price: (service.priceCents ?? 0) / 100,
     occasionIds: service.occasions?.map((o) => o.id) ?? service.occasionIds ?? [],
-    images: service.images?.map(({ url, alt }) => ({ url, alt })) ?? [],
+    // `key` solo vive en el panel (para reordenar sin confundir filas).
+    images: service.images?.map(({ url, alt, focus }) => ({ key: imageKey(), url, alt: alt ?? '', focus: focus || '50% 50%' })) ?? [],
     priceMode: service.priceMode ?? 'FIXED',
     includes: service.includes ?? [],
     // El campo trabaja con texto: vacío = usar el límite general.
@@ -240,22 +246,28 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
         : [...f.occasionIds, id],
     }));
 
-  // Tocar una foto de "mis trabajos" la añade; tocarla otra vez la quita.
-  const togglePortfolioImage = ({ url, alt }) =>
-    setForm((f) => {
-      if (f.images.some((img) => img.url === url)) return { ...f, images: f.images.filter((img) => img.url !== url) };
-      if (f.images.length >= 12) return f;
-      return { ...f, images: [...f.images, { url, alt }] };
-    });
-
-  const setImage = (index, key, value) =>
-    setForm((f) => ({
-      ...f,
-      images: f.images.map((img, i) => (i === index ? { ...img, [key]: value } : img)),
-    }));
+  /** Quita los errores de las fotos: al mover o quitar una, sus números cambian. */
+  const clearImageErrors = () =>
+    setErrors((e) => Object.fromEntries(Object.entries(e).filter(([key]) => !key.startsWith('images'))));
 
   async function submit(event) {
     event.preventDefault();
+
+    // Antes se descartaban en silencio las fotos sin descripción; ahora se
+    // marca cuál falta, para que Yury no pierda una foto sin darse cuenta.
+    const missing = Object.fromEntries(
+      form.images
+        .map((img, i) => [`images.${i}.alt`, img.alt.trim() ? null : 'Escribe qué se ve en esta foto.'])
+        .filter(([, message]) => message),
+    );
+    if (Object.keys(missing).length > 0) {
+      setErrors(missing);
+      toast.error('Hay fotos sin descripción. Escríbela para poder guardar.');
+      const first = form.images.find((img) => !img.alt.trim());
+      document.getElementById(`service-image-alt-${first.key}`)?.focus();
+      return;
+    }
+
     setSaving(true);
     setErrors({});
 
@@ -270,7 +282,7 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
       active: form.active,
       featured: form.featured,
       sortOrder: Number(form.sortOrder) || 0,
-      images: form.images.filter((img) => img.url && img.alt),
+      images: form.images.map(({ url, alt, focus }) => ({ url, alt: alt.trim(), focus: focus || '50% 50%' })),
       occasionIds: form.occasionIds,
       priceMode: form.priceMode,
       includes: form.includes,
@@ -458,85 +470,13 @@ function ServiceForm({ service, occasions, onClose, onSaved }) {
             hint="Frases cortas, una por fila. Se ven como lista en la ficha y las dos primeras en la tarjeta. Pon solo lo que de verdad trae este servicio."
           />
 
-          {/* Galería */}
-          <fieldset>
-            {/* La leyenda tiene que ser el primer hijo del fieldset (igual
-                que en «Qué incluye»); la visible va junto al botón. */}
-            <legend className="sr-only">Galería de fotos</legend>
-            <div className="mb-2 flex items-center justify-between">
-              <p className="label-base mb-0" aria-hidden="true">Galería de fotos</p>
-              <button
-                type="button"
-                onClick={() => setForm((f) => ({ ...f, images: [...f.images, { url: '', alt: '' }] }))}
-                disabled={form.images.length >= 12}
-                className="min-h-[44px] text-xs font-medium text-brand-700 transition hover:underline disabled:text-ink-400"
-              >
-                + Añadir foto
-              </button>
-            </div>
-
-            <PortfolioPicker
-              selected={form.images.map((img) => img.url)}
-              onPick={togglePortfolioImage}
-            />
-
-            {form.images.length === 0 ? (
-              <p className="mt-2 rounded-xl border border-dashed border-line p-4 text-sm text-ink-400">
-                Sin fotos todavía. Añade al menos una: el catálogo entra mucho mejor con imagen.
-              </p>
-            ) : (
-              <ul className="mt-2 space-y-3">
-                {form.images.map((image, index) => (
-                  <li key={index} className="rounded-xl border border-line p-3">
-                    <div className="flex gap-3">
-                      {image.url && (
-                        <img
-                          src={image.url}
-                          alt=""
-                          className="h-16 w-16 shrink-0 rounded-lg bg-blush object-cover"
-                          onError={(e) => {
-                            e.currentTarget.style.visibility = 'hidden';
-                          }}
-                        />
-                      )}
-                      <div className="min-w-0 flex-1 space-y-2">
-                        <input
-                          type="text"
-                          inputMode="url"
-                          value={image.url}
-                          onChange={(e) => setImage(index, 'url', e.target.value)}
-                          placeholder="https://… o /ruta-local.jpg"
-                          aria-label={`URL de la foto ${index + 1}`}
-                          className="input-base px-3 py-2 text-sm"
-                        />
-                        <input
-                          type="text"
-                          value={image.alt}
-                          onChange={(e) => setImage(index, 'alt', e.target.value)}
-                          placeholder="Descripción para accesibilidad (obligatoria)"
-                          aria-label={`Texto alternativo de la foto ${index + 1}`}
-                          maxLength={160}
-                          className="input-base px-3 py-2 text-sm"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setForm((f) => ({ ...f, images: f.images.filter((_, i) => i !== index) }))}
-                        className="h-11 w-11 shrink-0 rounded-lg text-ink-400 transition hover:bg-red-50 hover:text-red-700"
-                        aria-label={`Quitar foto ${index + 1}`}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="hint-text">
-              La primera foto es la portada de la tarjeta. Van en vertical (4:5). El texto alternativo
-              describe la imagen para quien usa lector de pantalla; las fotos sin descripción no se guardan.
-            </p>
-          </fieldset>
+          {/* Fotos: se eligen de la biblioteca (o se suben) en vez de pegar direcciones. */}
+          <ServiceImagesEditor
+            images={form.images}
+            onChange={(images) => setForm((f) => ({ ...f, images }))}
+            errors={errors}
+            onClearError={clearImageErrors}
+          />
 
           {/* Ocasiones */}
           <fieldset>

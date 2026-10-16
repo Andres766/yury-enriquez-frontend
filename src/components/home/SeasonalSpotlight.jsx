@@ -1,7 +1,9 @@
 import { Badge, Button, Reveal, cx } from '../ui/index.jsx';
 import { useSettings } from '../../context/SettingsContext.jsx';
 import { duration, priceLabel, seasonText, whatsappLink } from '../../lib/format.js';
-import { PORTFOLIO, photoSources } from '../../data/portfolio.js';
+import usePhotos from '../../hooks/usePhotos.js';
+import { seasonalPhotos } from '../portfolio/selection.js';
+import { photoImgProps } from '../portfolio/photoImage.js';
 import WhatsAppIcon from './WhatsAppIcon.jsx';
 import { firstName } from './contactInfo.js';
 import { findCatrina, useSeasonalService } from './useSeasonalService.js';
@@ -23,12 +25,14 @@ import { findCatrina, useSeasonalService } from './useSeasonalService.js';
  * y su botón.
  */
 
-// La media catrina ya está en la portada durante la temporada.
-const PHOTOS = PORTFOLIO.filter((p) => p.catrina && p.id !== 'catrina-media-cara').slice(0, 2);
+// Fotos: dos de "Halloween y Catrinas" de la biblioteca, primero las que
+// Yury marcó como destacadas (ver seasonalPhotos). La media catrina de
+// la portada no se repite.
 
 export default function SeasonalSpotlight() {
   const settings = useSettings();
   const { services = [] } = useSeasonalService();
+  const { photos: library } = usePhotos();
   if (settings.theme !== 'HALLOWEEN' || services.length === 0) return null;
 
   const number = settings.whatsappNumber || settings.contactPhone;
@@ -36,29 +40,28 @@ export default function SeasonalSpotlight() {
   const single = services.length === 1 ? services[0] : null;
   const catrina = findCatrina(services);
   const labelFor = (service) => (service === catrina ? 'Reservar mi Catrina' : 'Reservar');
+  const photos = seasonalPhotos(library);
 
   return (
     <section className="container-page pt-4 sm:pt-8" aria-labelledby="titulo-temporada">
       <Reveal>
         <div className="veil grid items-center gap-6 overflow-hidden rounded-[2rem] border border-line bg-surface p-5 shadow-soft sm:p-8 md:grid-cols-[auto_1fr] md:gap-10">
-          {PHOTOS.length > 0 && (
+          {photos.length > 0 && (
             <div className="flex gap-3">
-              {PHOTOS.map((photo) => {
-                const { src, srcSet } = photoSources(photo.id);
-                return (
+              {photos.map((photo) => (
+                <figure key={photo.id} className="w-32 shrink-0 sm:w-40 md:w-48">
                   <img
-                    key={photo.id}
-                    src={src}
-                    srcSet={srcSet}
-                    sizes="(min-width: 768px) 12rem, 40vw"
+                    {...photoImgProps(photo.url, { slot: 'tile', sizes: '(min-width: 768px) 12rem, (min-width: 640px) 10rem, 8rem', photo })}
                     alt={photo.alt}
                     loading="lazy"
                     decoding="async"
-                    style={{ objectPosition: photo.focus }}
-                    className="aspect-[4/5] w-32 rounded-2xl border border-line object-cover sm:w-40 md:w-48"
+                    className="aspect-[4/5] w-full rounded-2xl border border-line object-cover"
                   />
-                );
-              })}
+                  {photo.credit && (
+                    <figcaption className="mt-1 text-[10px] leading-tight text-ink-500">{photo.credit}</figcaption>
+                  )}
+                </figure>
+              ))}
             </div>
           )}
 

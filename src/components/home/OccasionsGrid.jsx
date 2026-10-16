@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import { SectionTitle, Button } from '../ui/index.jsx';
-import { isHiddenPhoto, occasionPriceFrom, photoProps } from '../../lib/catalog.js';
+import { isHiddenPhoto, occasionPriceFrom } from '../../lib/catalog.js';
+import usePhotos from '../../hooks/usePhotos.js';
+import { photoImgProps } from '../portfolio/photoImage.js';
 
 /**
  * "Para cada ocasión".
@@ -19,6 +21,7 @@ import { isHiddenPhoto, occasionPriceFrom, photoProps } from '../../lib/catalog.
  */
 export default function OccasionsGrid({ occasions = [], limit, showTitle = true }) {
   const reduced = useReducedMotion();
+  const { byUrl } = usePhotos();
   const items = limit ? occasions.slice(0, limit) : occasions;
 
   if (items.length === 0) return null;
@@ -67,7 +70,7 @@ export default function OccasionsGrid({ occasions = [], limit, showTitle = true 
                 <div className="relative aspect-[3/4] overflow-hidden">
                   {hero && (
                     <img
-                      {...photoProps(hero, '(min-width: 1024px) 33vw, 50vw')}
+                      {...photoImgProps(hero, { slot: 'tile', sizes: '(min-width: 1024px) 33vw, 50vw', byUrl })}
                       alt=""
                       loading="lazy"
                       decoding="async"

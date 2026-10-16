@@ -3,6 +3,7 @@ import { api, ApiError } from '../../lib/api.js';
 import { useToast } from '../../context/ToastContext.jsx';
 import { Button, Input, Textarea, Select, LoadingBlock, Alert } from '../../components/ui/index.jsx';
 import ThemePicker from '../../components/admin/ThemePicker.jsx';
+import PhotoField from '../../components/admin/PhotoField.jsx';
 import { applyTheme, useSettings } from '../../context/SettingsContext.jsx';
 import { depositText, money } from '../../lib/format.js';
 
@@ -126,6 +127,24 @@ const GROUPS = [
       { key: 'stampsRequired', label: 'Sellos para la recompensa', type: 'number', min: 2, max: 50 },
       { key: 'rewardDescription', label: 'Descripción de la recompensa' },
     ],
+  },
+];
+
+/**
+ * Las dos fotos grandes del inicio. Cada una guarda tres campos (foto,
+ * descripción y encuadre); los tres en null = la foto de siempre, la que
+ * viene con la web.
+ */
+const PAGE_PHOTOS = [
+  {
+    prefix: 'heroImage',
+    label: 'Foto principal del inicio',
+    hint: 'La primera foto que ve una clienta al abrir la web.',
+  },
+  {
+    prefix: 'aboutImage',
+    label: 'Foto de «Sobre mí»',
+    hint: 'Va junto a tu presentación en el inicio. Una foto tuya trabajando funciona muy bien.',
   },
 ];
 
@@ -366,6 +385,45 @@ export default function SettingsAdmin() {
                 </div>
               );
             })()}
+          </div>
+        </fieldset>
+
+        <fieldset className="rounded-2xl border border-line bg-surface p-5 shadow-soft sm:p-6">
+          <legend className="px-1 font-display text-xl text-ink-800">Fotos del inicio</legend>
+          <p className="mb-5 text-xs leading-relaxed text-ink-500">
+            Elígelas de tu biblioteca o sube una nueva desde el celular. Si no eliges ninguna, la web sigue con la de
+            siempre. Los cambios se ven cuando guardas.
+          </p>
+
+          <div className="grid gap-8 md:grid-cols-2 md:gap-6">
+            {PAGE_PHOTOS.map(({ prefix, label, hint }) => {
+              const urlKey = `${prefix}Url`;
+              const altKey = `${prefix}Alt`;
+              const focusKey = `${prefix}Focus`;
+              const clearErrors = () =>
+                setErrors((e) => ({ ...e, [urlKey]: undefined, [altKey]: undefined, [focusKey]: undefined }));
+              return (
+                <PhotoField
+                  key={prefix}
+                  label={label}
+                  hint={hint}
+                  value={{ url: form[urlKey], alt: form[altKey] ?? '', focus: form[focusKey] }}
+                  onChange={({ url, alt, focus }) => {
+                    setForm((f) => ({ ...f, [urlKey]: url || null, [altKey]: alt ?? '', [focusKey]: focus || null }));
+                    clearErrors();
+                  }}
+                  onClear={() => {
+                    setForm((f) => ({ ...f, [urlKey]: null, [altKey]: null, [focusKey]: null }));
+                    clearErrors();
+                  }}
+                  clearLabel="Usar la de siempre"
+                  emptyText="La de siempre"
+                  withAlt
+                  withFocus
+                  errors={{ url: errors[urlKey], alt: errors[altKey], focus: errors[focusKey] }}
+                />
+              );
+            })}
           </div>
         </fieldset>
 

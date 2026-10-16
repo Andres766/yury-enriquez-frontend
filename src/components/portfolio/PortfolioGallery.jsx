@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { photoSources } from '../../data/portfolio.js';
+import { photoImgProps } from './photoImage.js';
 import { cx } from '../ui/index.jsx';
 import Lightbox from './Lightbox.jsx';
 
@@ -12,7 +12,9 @@ import Lightbox from './Lightbox.jsx';
  * botón que abre el visor; al cerrarlo, el foco vuelve a esa casilla.
  *
  * `sizes` describe el ancho real de la casilla en cada pantalla, para
- * que el celular baje la versión de 480 px y no la de 960.
+ * que el celular baje la versión pequeña y no la grande.
+ *
+ * `photos` tiene la forma de usePhotos (url, alt, focus, credit…).
  */
 export default function PortfolioGallery({
   photos,
@@ -36,7 +38,7 @@ export default function PortfolioGallery({
     <>
       <ul className={cx('grid gap-2.5 sm:gap-4', className)}>
         {photos.map((photo, i) => {
-          const { src, srcSet } = photoSources(photo.id);
+          const image = photoImgProps(photo.url, { slot: 'tile', sizes, photo });
           return (
             <motion.li
               key={photo.id}
@@ -54,13 +56,10 @@ export default function PortfolioGallery({
                 className="group relative block aspect-[4/5] w-full overflow-hidden rounded-2xl border border-line bg-blush shadow-soft focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 sm:rounded-3xl"
               >
                 <img
-                  src={src}
-                  srcSet={srcSet}
-                  sizes={sizes}
+                  {...image}
                   alt={photo.alt}
                   loading={i < eager ? 'eager' : 'lazy'}
                   decoding="async"
-                  style={{ objectPosition: photo.focus }}
                   className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
                 />
                 <span className="sr-only">. Ver en grande</span>
@@ -68,9 +67,9 @@ export default function PortfolioGallery({
                 {/* Crédito del fotógrafo, visible sobre la foto. Va en
                     claro sobre un degradado oscuro en los tres temas,
                     porque lo que tiene debajo es una foto, no el fondo. */}
-                {photo.credito && (
+                {photo.credit && (
                   <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-scrim/70 to-transparent px-2.5 pb-2 pt-6 text-left text-[10px] leading-tight text-white/90 sm:text-[11px]">
-                    {photo.credito}
+                    {photo.credit}
                   </span>
                 )}
               </button>

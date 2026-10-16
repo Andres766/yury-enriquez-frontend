@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, useReducedMotion } from 'framer-motion';
-import { photoSources } from '../../data/portfolio.js';
+import { photoImgProps } from './photoImage.js';
 
 /**
  * Visor de fotos a pantalla completa.
@@ -75,7 +75,12 @@ export default function Lightbox({ photos, index, onClose, onNavigate }) {
   }, [index, total, onClose, onNavigate]);
 
   if (!photo) return null;
-  const { src, srcSet } = photoSources(photo.id);
+  // Foto completa (object-contain): sin punto de enfoque, que solo
+  // sirve para recortar.
+  const { src, srcSet, sizes } = photoImgProps(photo.url, {
+    slot: 'full',
+    sizes: '(min-width: 768px) 48rem, 100vw',
+  });
 
   const onTouchStart = (event) => {
     touchX.current = event.touches[0]?.clientX ?? null;
@@ -129,17 +134,17 @@ export default function Lightbox({ photos, index, onClose, onNavigate }) {
 
         <figure className="flex h-full min-w-0 max-w-3xl flex-1 flex-col items-center justify-center">
           <img
-            key={photo.id}
+            key={photo.url}
             src={src}
             srcSet={srcSet}
-            sizes="(min-width: 768px) 48rem, 100vw"
+            sizes={sizes}
             alt={photo.alt}
             decoding="async"
             className="min-h-0 max-h-full w-auto max-w-full flex-1 rounded-2xl object-contain"
           />
           <figcaption className="mt-3 max-w-xl px-2 text-center text-sm leading-relaxed text-white/85">
             {photo.alt}
-            {photo.credito && <span className="mt-1 block text-xs text-white/60">{photo.credito}</span>}
+            {photo.credit && <span className="mt-1 block text-xs text-white/60">{photo.credit}</span>}
           </figcaption>
         </figure>
 

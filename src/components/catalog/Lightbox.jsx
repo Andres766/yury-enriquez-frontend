@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { photoProps } from '../../lib/catalog.js';
+import { imageSources } from '../../lib/images.js';
+import { SLOTS } from '../portfolio/photoImage.js';
 
 /**
  * Foto en pantalla completa.
@@ -55,6 +56,10 @@ export default function Lightbox({ images, index, onIndex, onClose }) {
 
   if (!image) return null;
 
+  // Foto entera (object-contain): sin punto de enfoque. Cloudinary la
+  // entrega al ancho de la pantalla, no el original de varios megas.
+  const { src, srcSet } = imageSources(image.url, SLOTS.full);
+
   const nav =
     'flex h-12 w-12 items-center justify-center rounded-full bg-surface/90 text-ink-800 shadow-soft transition hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600';
 
@@ -84,8 +89,9 @@ export default function Lightbox({ images, index, onIndex, onClose }) {
       <div className="relative flex min-h-0 flex-1 items-center justify-center px-2 pb-6" onClick={(e) => e.stopPropagation()}>
         <img
           key={image.url}
-          {...photoProps(image.url, '100vw')}
-          style={undefined}
+          src={src}
+          srcSet={srcSet}
+          sizes={srcSet ? '100vw' : undefined}
           alt={image.alt}
           className="max-h-full max-w-full rounded-xl object-contain"
         />

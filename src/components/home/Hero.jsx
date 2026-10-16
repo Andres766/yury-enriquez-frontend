@@ -3,7 +3,10 @@ import { Link } from 'react-router-dom';
 import { Button } from '../ui/index.jsx';
 import { useSettings } from '../../context/SettingsContext.jsx';
 import { whatsappLink } from '../../lib/format.js';
-import { PORTFOLIO, photoSources } from '../../data/portfolio.js';
+import { PORTFOLIO } from '../../data/portfolio.js';
+import usePhotos, { photoKey } from '../../hooks/usePhotos.js';
+import { HALLOWEEN_HERO_URL } from '../portfolio/selection.js';
+import { photoImgProps } from '../portfolio/photoImage.js';
 import PapelPicadoGarland from '../seasonal/PapelPicadoGarland.jsx';
 import WhatsAppIcon from './WhatsAppIcon.jsx';
 import { firstName } from './contactInfo.js';
@@ -24,14 +27,23 @@ import { firstName } from './contactInfo.js';
  * En temporada de Halloween cambia la foto, no el decorado: se muestra
  * una catrina real hecha por Yury, sin tintes encima (un filtro de color
  * cambia el tono de piel y del maquillaje, que es justo lo que se vende).
+ *
+ * Foto: si Yury eligió una en Panel → Ajustes (heroImageUrl), va esa, con
+ * su texto alternativo y su punto de enfoque; si no, la de siempre. La
+ * catrina de temporada manda sobre las dos. No se pinta ninguna hasta
+ * saber cuál toca (settings.loaded): si no, el celular bajaría la foto de
+ * siempre y enseguida la nueva.
  */
 
 const HALLOWEEN_PHOTO = PORTFOLIO.find((p) => p.id === 'catrina-media-cara');
+const HERO_SIZES = '(min-width: 1024px) 45vw, 90vw';
 
 export default function Hero() {
   const settings = useSettings();
   const reduced = useReducedMotion();
   const halloween = settings.theme === 'HALLOWEEN' && Boolean(HALLOWEEN_PHOTO);
+  const { byUrl } = usePhotos();
+  const customUrl = settings.heroImageUrl || null;
 
   const number = settings.whatsappNumber || settings.contactPhone;
   const bridalMessage = `Hola ${firstName(settings.brandName)}, me caso el ___ en ___ y quiero cotizar maquillaje y peinado de novia.`;
@@ -64,12 +76,23 @@ export default function Hero() {
           className="relative order-first mx-auto w-full max-w-md lg:order-last lg:max-w-none"
         >
           <div className="relative h-[44svh] min-h-[15rem] max-h-[32rem] overflow-hidden rounded-[2rem] border border-line bg-blush shadow-lift lg:aspect-[4/5] lg:h-auto lg:max-h-none lg:rounded-[2.5rem]">
-            {halloween ? (
+            {!settings.loaded ? null : halloween ? (
               <img
-                {...photoSources(HALLOWEEN_PHOTO.id)}
-                sizes="(min-width: 1024px) 45vw, 90vw"
+                {...photoImgProps(HALLOWEEN_HERO_URL, { slot: 'large', sizes: HERO_SIZES, photo: HALLOWEEN_PHOTO })}
                 alt={HALLOWEEN_PHOTO.alt}
-                style={{ objectPosition: HALLOWEEN_PHOTO.focus }}
+                className="h-full w-full object-cover"
+                fetchpriority="high"
+                decoding="async"
+              />
+            ) : customUrl ? (
+              <img
+                {...photoImgProps(customUrl, {
+                  slot: 'large',
+                  sizes: HERO_SIZES,
+                  focus: settings.heroImageFocus,
+                  byUrl,
+                })}
+                alt={settings.heroImageAlt || byUrl.get(photoKey(customUrl))?.alt || ''}
                 className="h-full w-full object-cover"
                 fetchpriority="high"
                 decoding="async"

@@ -5,6 +5,7 @@
  * portafolio de fotos reales): aquí no se inventa ningún precio ni
  * ninguna condición del negocio.
  */
+import { imageSources } from './images.js';
 import { PORTFOLIO, SHOW_MINORS, photoSources } from '../data/portfolio.js';
 import { money, priceLabel, whatsappLink } from './format.js';
 
@@ -155,7 +156,12 @@ export function isHiddenPhoto(url) {
  */
 export function photoProps(url, sizes = '(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw') {
   const photo = portfolioPhoto(url);
-  if (!photo) return { src: url, style: { objectPosition: DEFAULT_FOCUS } };
+  if (!photo) {
+    // Fotos subidas por Yury (Cloudinary): se piden en el tamaño de la
+    // casilla en vez del original de varios megas.
+    const { src, srcSet } = imageSources(url, { widths: [240, 480, 960], fallback: 480 });
+    return { src, srcSet, sizes, style: { objectPosition: DEFAULT_FOCUS } };
+  }
   const { src, srcSet } = photoSources(photo.id);
   return { src, srcSet, sizes, style: { objectPosition: photo.focus } };
 }

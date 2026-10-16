@@ -34,6 +34,7 @@ const LoyaltyAdmin = lazy(() => import('./pages/admin/LoyaltyAdmin.jsx'));
 const SettingsAdmin = lazy(() => import('./pages/admin/SettingsAdmin.jsx'));
 const OccasionsAdmin = lazy(() => import('./pages/admin/OccasionsAdmin.jsx'));
 const TestimonialsAdmin = lazy(() => import('./pages/admin/TestimonialsAdmin.jsx'));
+const PhotosAdmin = lazy(() => import('./pages/admin/PhotosAdmin.jsx'));
 
 export default function App() {
   return (
@@ -79,6 +80,7 @@ export default function App() {
           <Route path="agenda" element={<ScheduleAdmin />} />
           <Route path="servicios" element={<ServicesAdmin />} />
           <Route path="ocasiones" element={<OccasionsAdmin />} />
+          <Route path="fotos" element={<PhotosAdmin />} />
           <Route path="promociones" element={<PromotionsAdmin />} />
           <Route path="testimonios" element={<TestimonialsAdmin />} />
           <Route path="fidelidad" element={<LoyaltyAdmin />} />

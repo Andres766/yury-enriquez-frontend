@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { PORTFOLIO, PORTFOLIO_CATEGORIES } from '../data/portfolio.js';
+import { PORTFOLIO_CATEGORIES } from '../data/portfolio.js';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { whatsappLink } from '../lib/format.js';
 import { SectionTitle, EmptyState, Button, Reveal, cx } from '../components/ui/index.jsx';
 import PortfolioGallery from '../components/portfolio/PortfolioGallery.jsx';
-import { photosFor } from '../components/portfolio/selection.js';
+import { categoriesWithPhotos, photosFor } from '../components/portfolio/selection.js';
+import usePhotos from '../hooks/usePhotos.js';
 import WhatsAppIcon from '../components/home/WhatsAppIcon.jsx';
 import { firstName, instagramHandle } from '../components/home/contactInfo.js';
 
@@ -15,22 +16,26 @@ import { firstName, instagramHandle } from '../components/home/contactInfo.js';
  * El filtro vive en la URL (?categoria=novias) para que Yury pueda
  * mandar por WhatsApp el enlace directo a las fotos de novias, y para
  * que la franja de temporada enlace a las de Halloween.
+ *
+ * Las fotos salen de la biblioteca del panel (usePhotos), en el orden
+ * que Yury eligió.
  */
 export default function Portfolio() {
   const settings = useSettings();
+  const { photos: library, loading } = usePhotos();
   const [searchParams, setSearchParams] = useSearchParams();
   const inSeason = settings.theme === 'HALLOWEEN';
 
   const requested = searchParams.get('categoria') ?? '';
   const category = PORTFOLIO_CATEGORIES.some((c) => c.id === requested) ? requested : '';
 
-  const photos = useMemo(() => photosFor(category, { inSeason }), [category, inSeason]);
+  const photos = useMemo(() => photosFor(library, category, { inSeason }), [library, category, inSeason]);
 
   // Solo se ofrecen los filtros que tienen fotos (por ejemplo, si se
   // ocultan las de menores, Quinceañeras puede quedar vacía).
   const filters = [
     { id: '', label: 'Todos' },
-    ...PORTFOLIO_CATEGORIES.filter((c) => PORTFOLIO.some((p) => p.category === c.id)),
+    ...categoriesWithPhotos(library),
   ];
 
   const setCategory = (value) => {
@@ -79,10 +84,12 @@ export default function Portfolio() {
 
       {/* Se anuncia el cambio de filtro a quien usa lector de pantalla */}
       <p className="sr-only" aria-live="polite">
-        {photos.length} fotos
+        {loading ? 'Cargando fotos' : `${photos.length} fotos`}
       </p>
 
-      {photos.length === 0 ? (
+      {loading ? (
+        <GallerySkeleton />
+      ) : photos.length === 0 ? (
         <EmptyState
           title="Todavía no hay fotos aquí"
           description="Por ahora no hay fotos de este tipo. Mira las demás categorías."
@@ -134,5 +141,16 @@ export default function Portfolio() {
         </div>
       </Reveal>
     </div>
+  );
+}
+
+/** Casillas vacías del mismo tamaño mientras llegan las fotos: la página no salta. */
+function GallerySkeleton() {
+  return (
+    <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4" aria-hidden="true">
+      {Array.from({ length: 8 }, (_, i) => (
+        <li key={i} className="aspect-[4/5] animate-pulse rounded-2xl border border-line bg-blush sm:rounded-3xl" />
+      ))}
+    </ul>
   );
 }

@@ -3,9 +3,11 @@ import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api, ApiError } from '../../lib/api.js';
 import { useToast } from '../../context/ToastContext.jsx';
-import { photoProps } from '../../lib/catalog.js';
+import { imageSources } from '../../lib/images.js';
 import IncludesEditor from '../../components/catalog/IncludesEditor.jsx';
-import PortfolioPicker from '../../components/catalog/PortfolioPicker.jsx';
+import { focusFor } from '../../components/portfolio/photoImage.js';
+import PhotoField from '../../components/admin/PhotoField.jsx';
+import { useLibraryByUrl } from '../../components/admin/photoLibrary.js';
 import {
   Button, Input, Textarea, Checkbox, Badge, LoadingBlock, EmptyState, Alert, cx,
 } from '../../components/ui/index.jsx';
@@ -28,6 +30,8 @@ export default function OccasionsAdmin() {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [editing, setEditing] = useState(null);
+  // Para que la miniatura use el mismo encuadre que la web.
+  const byUrl = useLibraryByUrl();
 
   const load = () =>
     api
@@ -84,8 +88,10 @@ export default function OccasionsAdmin() {
             >
               {occasion.heroImage ? (
                 <img
-                  {...photoProps(occasion.heroImage, '4rem')}
+                  {...imageSources(occasion.heroImage, { widths: [160, 320], fallback: 320 })}
+                  sizes="4rem"
                   alt=""
+                  style={{ objectPosition: focusFor(occasion.heroImage, null, byUrl) }}
                   className="h-20 w-16 shrink-0 rounded-xl bg-blush object-cover"
                   loading="lazy"
                 />
@@ -162,7 +168,6 @@ function OccasionForm({ occasion, onClose, onSaved }) {
   });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
-  const [previewBroken, setPreviewBroken] = useState(false);
 
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose();
@@ -178,7 +183,6 @@ function OccasionForm({ occasion, onClose, onSaved }) {
     const value = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
     setForm((f) => ({ ...f, [key]: value }));
     setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e));
-    if (key === 'heroImage') setPreviewBroken(false);
   };
 
   async function submit(event) {
@@ -301,57 +305,20 @@ function OccasionForm({ occasion, onClose, onSaved }) {
             hint="Solo lo que vale para TODOS los servicios de esta ocasión. Lo que trae un servicio en particular (pruebas, descuentos, retoques) va en «Qué incluye» de ese servicio."
           />
 
-          {/* Portada */}
-          <fieldset>
-            <legend className="label-base">
-              Foto de portada <span className="ml-1 text-xs font-normal text-ink-400">(opcional)</span>
-            </legend>
-            <div className="flex gap-3">
-              {form.heroImage && !previewBroken ? (
-                <img
-                  {...photoProps(form.heroImage, '5rem')}
-                  alt=""
-                  onError={() => setPreviewBroken(true)}
-                  className="h-24 w-20 shrink-0 rounded-lg bg-blush object-cover"
-                />
-              ) : (
-                <div className="flex h-24 w-20 shrink-0 items-center justify-center rounded-lg bg-blush px-1 text-center text-[10px] leading-tight text-ink-400">
-                  {form.heroImage ? 'No se pudo cargar' : 'Sin foto'}
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <Input
-                  label="Dirección de la foto"
-                  type="text"
-                  inputMode="url"
-                  value={form.heroImage}
-                  onChange={set('heroImage')}
-                  error={errors.heroImage}
-                  placeholder="/img/trabajos/… o https://…"
-                  hint="Elígela de tus trabajos o pega una dirección. Va en vertical (4:5)."
-                />
-              </div>
-            </div>
-            <div className="mt-1 flex flex-wrap items-center gap-4">
-              <PortfolioPicker
-                selected={form.heroImage ? [form.heroImage] : []}
-                onPick={({ url }) => {
-                  setForm((f) => ({ ...f, heroImage: f.heroImage === url ? '' : url }));
-                  setErrors((e) => (e.heroImage ? { ...e, heroImage: undefined } : e));
-                  setPreviewBroken(false);
-                }}
-              />
-              {form.heroImage && (
-                <button
-                  type="button"
-                  onClick={() => setForm((f) => ({ ...f, heroImage: '' }))}
-                  className="min-h-[44px] text-xs font-medium text-ink-500 transition hover:text-red-700"
-                >
-                  Quitar foto
-                </button>
-              )}
-            </div>
-          </fieldset>
+          {/* Portada: se elige de la biblioteca (o se sube) en vez de pegar una dirección. */}
+          <PhotoField
+            label="Foto de portada (opcional)"
+            value={{ url: form.heroImage }}
+            onChange={({ url }) => {
+              setForm((f) => ({ ...f, heroImage: url ?? '' }));
+              setErrors((e) => (e.heroImage ? { ...e, heroImage: undefined } : e));
+            }}
+            onClear={() => setForm((f) => ({ ...f, heroImage: '' }))}
+            clearLabel="Quitar foto"
+            errors={{ url: errors.heroImage }}
+            pickerTitle={`Portada de ${occasion.name}`}
+            hint="Va en vertical (4:5). El encuadre es el que la foto tiene en Panel → Fotos."
+          />
 
           <div className="border-t border-line pt-5">
             <Checkbox

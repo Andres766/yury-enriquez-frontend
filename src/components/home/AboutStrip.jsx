@@ -1,5 +1,7 @@
 import { Reveal } from '../ui/index.jsx';
 import { useSettings } from '../../context/SettingsContext.jsx';
+import usePhotos, { photoKey } from '../../hooks/usePhotos.js';
+import { photoImgProps } from '../portfolio/photoImage.js';
 import { instagramHandle } from './contactInfo.js';
 
 /**
@@ -8,10 +10,11 @@ import { instagramHandle } from './contactInfo.js';
  * La marca es una persona, así que la sección habla de ella y en primera
  * persona, como el texto que escribe en Panel → Ajustes (`aboutText`).
  *
- * Foto: todavía no hay un retrato suyo aparte; la única foto real de
- * Yury es la de la portada, trabajando. Aquí se usa recortada sobre ella
- * (no sobre la clienta), que es mejor que una foto de relleno. Cuando
- * haya retrato, basta con cambiar las rutas de abajo.
+ * Foto: si Yury eligió una en Panel → Ajustes (aboutImageUrl), va esa,
+ * entera, con su texto alternativo y su punto de enfoque. Si no, la de
+ * siempre: la foto de la portada, trabajando, recortada sobre ella (no
+ * sobre la clienta), que es mejor que una foto de relleno. No se pinta
+ * ninguna hasta saber cuál toca, para no bajar las dos.
  *
  * Texto: si la primera línea va entre comillas (“…” o "…"), es su frase
  * de cabecera y se pinta como cita destacada; el resto se parte en
@@ -50,6 +53,8 @@ export default function AboutStrip() {
   const settings = useSettings();
   const handle = instagramHandle(settings.instagramUrl);
   const about = splitAbout(settings.aboutText);
+  const { byUrl } = usePhotos();
+  const customUrl = settings.aboutImageUrl || null;
 
   return (
     <section className="container-page py-14 sm:py-20" aria-labelledby="sobre-mi">
@@ -102,21 +107,36 @@ export default function AboutStrip() {
 
         <Reveal delay={0.1} className="order-1 lg:order-2">
           <div className="mx-auto aspect-[4/5] max-w-xs overflow-hidden rounded-[2rem] border border-line bg-blush shadow-lift sm:max-w-sm lg:max-w-none lg:rounded-[2.5rem]">
-            <picture>
-              <source type="image/webp" srcSet={PORTRAIT.webp} sizes="(min-width: 1024px) 45vw, 20rem" />
+            {!settings.loaded ? null : customUrl ? (
               <img
-                src={PORTRAIT.src}
-                srcSet={PORTRAIT.jpg}
-                sizes="(min-width: 1024px) 45vw, 20rem"
-                width="1084"
-                height="1451"
-                alt={PORTRAIT.alt}
+                {...photoImgProps(customUrl, {
+                  slot: 'large',
+                  sizes: '(min-width: 1024px) 45vw, (min-width: 640px) 24rem, 20rem',
+                  focus: settings.aboutImageFocus,
+                  byUrl,
+                })}
+                alt={settings.aboutImageAlt || byUrl.get(photoKey(customUrl))?.alt || ''}
                 loading="lazy"
                 decoding="async"
-                style={{ objectPosition: PORTRAIT.focus }}
-                className="h-full w-full origin-[30%_28%] scale-[1.35] object-cover"
+                className="h-full w-full object-cover"
               />
-            </picture>
+            ) : (
+              <picture>
+                <source type="image/webp" srcSet={PORTRAIT.webp} sizes="(min-width: 1024px) 45vw, 20rem" />
+                <img
+                  src={PORTRAIT.src}
+                  srcSet={PORTRAIT.jpg}
+                  sizes="(min-width: 1024px) 45vw, 20rem"
+                  width="1084"
+                  height="1451"
+                  alt={PORTRAIT.alt}
+                  loading="lazy"
+                  decoding="async"
+                  style={{ objectPosition: PORTRAIT.focus }}
+                  className="h-full w-full origin-[30%_28%] scale-[1.35] object-cover"
+                />
+              </picture>
+            )}
           </div>
         </Reveal>
       </div>

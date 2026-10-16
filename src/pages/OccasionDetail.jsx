@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
-import { photoSources, PORTFOLIO_CATEGORIES } from '../data/portfolio.js';
+import { PORTFOLIO_CATEGORIES } from '../data/portfolio.js';
 import { longDate } from '../lib/format.js';
 import {
   DATE_OCCASIONS,
@@ -9,10 +9,11 @@ import {
   bookingPath,
   isHiddenPhoto,
   occasionPriceFrom,
-  photoProps,
-  portfolioForOccasion,
   waHref,
 } from '../lib/catalog.js';
+import usePhotos from '../hooks/usePhotos.js';
+import { photoImgProps } from '../components/portfolio/photoImage.js';
+import { categoryForOccasion, photosForOccasion } from '../components/portfolio/selection.js';
 import { useSettings } from '../context/SettingsContext.jsx';
 import ServiceCard from '../components/ServiceCard.jsx';
 import MobileCtaBar, { useStickyCta } from '../components/catalog/MobileCtaBar.jsx';
@@ -25,6 +26,7 @@ import { Button, LoadingBlock, EmptyState, Reveal } from '../components/ui/index
 export default function OccasionDetail() {
   const { slug } = useParams();
   const settings = useSettings();
+  const { photos: library, byUrl } = usePhotos();
   const [occasion, setOccasion] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -129,8 +131,9 @@ export default function OccasionDetail() {
         secondary: waAsk ? { label: 'Preguntar por WhatsApp', href: waAsk, icon: 'whatsapp' } : null,
       };
 
-  const gallery = portfolioForOccasion(occasion.slug).slice(0, 6);
-  const galleryLabel = PORTFOLIO_CATEGORIES.find((c) => c.id === gallery[0]?.category)?.label;
+  // Trabajos reales de la biblioteca, de la categoría que va con la ocasión.
+  const gallery = photosForOccasion(library, occasion.slug).slice(0, 6);
+  const galleryLabel = PORTFOLIO_CATEGORIES.find((c) => c.id === categoryForOccasion(occasion.slug))?.label;
 
   return (
     <article className="pb-20">
@@ -182,7 +185,7 @@ export default function OccasionDetail() {
           {hero && (
             <div className="mx-auto w-full max-w-sm overflow-hidden rounded-[2rem] border border-line bg-blush shadow-soft lg:max-w-md">
               <img
-                {...photoProps(hero, '(min-width: 1024px) 28rem, 90vw')}
+                {...photoImgProps(hero, { slot: 'large', sizes: '(min-width: 1024px) 28rem, 90vw', byUrl })}
                 alt=""
                 fetchpriority="high"
                 decoding="async"
@@ -264,28 +267,20 @@ export default function OccasionDetail() {
             Trabajos reales{galleryLabel ? `: ${galleryLabel.toLowerCase()}` : ''}
           </h2>
           <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
-            {gallery.map((photo) => {
-              const { src, srcSet } = photoSources(photo.id);
-              return (
-                <li key={photo.id} className="overflow-hidden rounded-2xl border border-line bg-blush">
-                  <figure>
-                    <img
-                      src={src}
-                      srcSet={srcSet}
-                      sizes="(min-width: 1024px) 33vw, 50vw"
-                      alt={photo.alt}
-                      loading="lazy"
-                      decoding="async"
-                      style={{ objectPosition: photo.focus }}
-                      className="aspect-[4/5] w-full object-cover"
-                    />
-                    {photo.credito && (
-                      <figcaption className="px-3 py-2 text-[11px] text-ink-500">{photo.credito}</figcaption>
-                    )}
-                  </figure>
-                </li>
-              );
-            })}
+            {gallery.map((photo) => (
+              <li key={photo.id} className="overflow-hidden rounded-2xl border border-line bg-blush">
+                <figure>
+                  <img
+                    {...photoImgProps(photo.url, { slot: 'tile', sizes: '(min-width: 1024px) 33vw, 50vw', photo })}
+                    alt={photo.alt}
+                    loading="lazy"
+                    decoding="async"
+                    className="aspect-[4/5] w-full object-cover"
+                  />
+                  {photo.credit && <figcaption className="px-3 py-2 text-[11px] text-ink-500">{photo.credit}</figcaption>}
+                </figure>
+              </li>
+            ))}
           </ul>
         </section>
       )}

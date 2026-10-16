@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import { duration, priceLabel, seasonText } from '../lib/format.js';
-import { isSeasonalService, photoProps, visibleImages } from '../lib/catalog.js';
+import { isSeasonalService, visibleImages } from '../lib/catalog.js';
+import usePhotos from '../hooks/usePhotos.js';
+import { photoImgProps } from './portfolio/photoImage.js';
 import { Badge, cx } from './ui/index.jsx';
 import { CalendarIcon, CheckIcon, StarPlaceholder } from './catalog/icons.jsx';
 
@@ -27,7 +29,8 @@ import { CalendarIcon, CheckIcon, StarPlaceholder } from './catalog/icons.jsx';
  */
 export default function ServiceCard({ service, index = 0, occasionSlug, className }) {
   const reduced = useReducedMotion();
-  const cover = visibleImages(service.images)[0];
+  const { byUrl } = usePhotos();
+  const cover = visibleImages(service.images).find((image) => image?.url);
   const price = priceLabel(service);
   const season = seasonText(service);
   const highlights = service.includes?.slice(0, 2) ?? [];
@@ -51,7 +54,12 @@ export default function ServiceCard({ service, index = 0, occasionSlug, classNam
         <div className="relative aspect-[4/5] overflow-hidden bg-blush">
           {cover ? (
             <img
-              {...photoProps(cover.url)}
+              {...photoImgProps(cover.url, {
+                slot: 'tile',
+                sizes: '(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw',
+                focus: cover.focus,
+                byUrl,
+              })}
               alt={cover.alt}
               loading={index < 3 ? 'eager' : 'lazy'}
               decoding="async"

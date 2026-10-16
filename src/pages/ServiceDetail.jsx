@@ -10,7 +10,6 @@ import {
   bookingPath,
   isDateService,
   isSeasonalService,
-  photoProps,
   seasonIsAhead,
   seasonIsOver,
   visibleImages,
@@ -22,6 +21,8 @@ import ServiceCard from '../components/ServiceCard.jsx';
 import MobileCtaBar, { useStickyCta } from '../components/catalog/MobileCtaBar.jsx';
 import Lightbox from '../components/catalog/Lightbox.jsx';
 import usePageTitle from '../components/catalog/usePageTitle.js';
+import usePhotos from '../hooks/usePhotos.js';
+import { photoImgProps } from '../components/portfolio/photoImage.js';
 import { CalendarIcon, CheckIcon, StarPlaceholder, WhatsAppIcon } from '../components/catalog/icons.jsx';
 
 // Ocasiones en las que la clienta suele venir acompañada (mamá, damas,
@@ -34,6 +35,7 @@ export default function ServiceDetail() {
   const fromOccasion = searchParams.get('ocasion');
   const settings = useSettings();
   const reduced = useReducedMotion();
+  const { byUrl } = usePhotos();
 
   const [service, setService] = useState(null);
   const [related, setRelated] = useState([]);
@@ -127,7 +129,8 @@ export default function ServiceDetail() {
     );
   }
 
-  const images = visibleImages(service.images);
+  // Sin URL no hay foto que mostrar (una fila a medio cargar en el panel).
+  const images = visibleImages(service.images).filter((image) => image?.url);
   const price = priceLabel(service);
 
   // La ocasión de la URL solo cuenta si el servicio de verdad la tiene.
@@ -229,7 +232,12 @@ export default function ServiceDetail() {
                     className="relative aspect-[4/5] w-full shrink-0 snap-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600"
                   >
                     <img
-                      {...photoProps(image.url, '(min-width: 1024px) 32rem, 100vw')}
+                      {...photoImgProps(image.url, {
+                        slot: 'large',
+                        sizes: '(min-width: 1024px) 32rem, 100vw',
+                        focus: image.focus,
+                        byUrl,
+                      })}
                       alt=""
                       loading={i === 0 ? 'eager' : 'lazy'}
                       decoding="async"
@@ -276,7 +284,13 @@ export default function ServiceDetail() {
                       : 'border-transparent opacity-65 hover:opacity-100',
                   )}
                 >
-                  <img {...photoProps(image.url, '6rem')} alt="" loading="lazy" className="aspect-[4/5] w-full object-cover" />
+                  <img
+                    {...photoImgProps(image.url, { slot: 'thumb', sizes: '6rem', focus: image.focus, byUrl })}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    className="aspect-[4/5] w-full object-cover"
+                  />
                 </button>
               ))}
             </div>

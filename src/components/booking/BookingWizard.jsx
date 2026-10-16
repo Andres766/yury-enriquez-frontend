@@ -17,6 +17,7 @@ import {
   depositText,
 } from '../../lib/format.js';
 import { Button, Input, Textarea, Badge, Alert, Spinner, LoadingBlock, cx } from '../ui/index.jsx';
+import { photoImgProps } from '../portfolio/photoImage.js';
 import Calendar from './Calendar.jsx';
 import Stepper from './Stepper.jsx';
 import { WhatsAppButtonLink, WhatsAppTextLink } from './WhatsAppAction.jsx';
@@ -901,9 +902,9 @@ function ServiceOption({ item, active, onSelect }) {
         className="sr-only-focusable absolute left-4 top-4 h-4 w-4"
       />
 
-      {item.images?.[0] && (
+      {item.images?.[0]?.url && (
         <img
-          src={item.images[0].url}
+          {...photoImgProps(item.images[0].url, { slot: 'thumb', sizes: '5rem', focus: item.images[0].focus })}
           alt=""
           loading="lazy"
           className="hidden h-20 w-20 shrink-0 rounded-xl object-cover sm:block"
@@ -1561,9 +1562,9 @@ function Summary({ service, occasion, slot, timezone, serviceAddress, homeVisit,
     <aside className="hidden rounded-3xl border border-line bg-surface p-5 shadow-soft lg:sticky lg:top-24 lg:block">
       <p className="text-xs font-semibold uppercase tracking-widest text-ink-400">Tu reserva</p>
 
-      {service.images?.[0] && (
+      {service.images?.[0]?.url && (
         <img
-          src={service.images[0].url}
+          {...photoImgProps(service.images[0].url, { slot: 'tile', sizes: '20rem', focus: service.images[0].focus })}
           alt=""
           loading="lazy"
           className="mt-4 aspect-[16/10] w-full rounded-2xl object-cover"

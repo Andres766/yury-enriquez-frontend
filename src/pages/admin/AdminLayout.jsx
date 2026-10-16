@@ -28,6 +28,11 @@ const NAV = [
     icon: 'M12 3.5 14.4 9l5.6.5-4.3 3.9 1.3 5.6L12 16l-5 3 1.3-5.6L4 9.5 9.6 9z',
   },
   {
+    to: '/admin/fotos',
+    label: 'Fotos',
+    icon: 'M4.5 6.5h15v12h-15zM8.5 10.5a1.5 1.5 0 1 0 0-.01M19.5 15.5l-4.5-4.5-7 7',
+  },
+  {
     to: '/admin/ocasiones',
     label: 'Ocasiones',
     icon: 'M4.5 7.5h15v12h-15zM8 7.5V5.5a4 4 0 0 1 8 0v2',
