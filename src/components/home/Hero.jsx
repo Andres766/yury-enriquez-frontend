@@ -20,9 +20,9 @@ import { firstName } from './contactInfo.js';
  * y el botón de reservar no queda enterrado. A partir de `lg` pasa a dos
  * columnas, con la foto a la derecha.
  *
- * Dos caminos: reservar en línea, o cotizar la boda por WhatsApp. Las
- * novias suelen reservar con meses de anticipación y preguntar antes de
- * decidir; el calendario no es su primer paso.
+ * Dos caminos: reservar en línea, o cotizar por WhatsApp. Novias,
+ * quinceañeras y grupos suelen preguntar antes de decidir (y reservan
+ * con meses de anticipación); para ellas el calendario no es el primer paso.
  *
  * En temporada de Halloween cambia la foto, no el decorado: se muestra
  * una catrina real hecha por Yury, sin tintes encima (un filtro de color
@@ -46,7 +46,7 @@ export default function Hero() {
   const customUrl = settings.heroImageUrl || null;
 
   const number = settings.whatsappNumber || settings.contactPhone;
-  const bridalMessage = `Hola ${firstName(settings.brandName)}, me caso el ___ en ___ y quiero cotizar maquillaje y peinado de novia.`;
+  const quoteMessage = `Hola ${firstName(settings.brandName)}, quiero cotizar un servicio. Es para ___ el día ___.`;
 
   const fadeUp = (delay = 0) => ({
     initial: reduced ? false : { opacity: 0, y: 22 },
@@ -177,19 +177,19 @@ export default function Hero() {
             </Button>
             {number ? (
               <Button
-                href={whatsappLink(number, bridalMessage)}
+                href={whatsappLink(number, quoteMessage)}
                 target="_blank"
                 rel="noopener noreferrer"
                 variant="secondary"
                 size="lg"
               >
                 <WhatsAppIcon className="h-5 w-5 text-wa" />
-                Cotizar mi boda
-                <span className="sr-only">por WhatsApp (se abre en una pestaña nueva)</span>
+                Cotizar por WhatsApp
+                <span className="sr-only">(se abre en una pestaña nueva)</span>
               </Button>
             ) : (
-              <Button to="/servicios?ocasion=bodas" variant="secondary" size="lg">
-                Ver opciones para novias
+              <Button to="/servicios" variant="secondary" size="lg">
+                Ver servicios y precios
               </Button>
             )}
           </motion.div>
