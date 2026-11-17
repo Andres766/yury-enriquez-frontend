@@ -22,9 +22,12 @@ export const SEASON_CATEGORY = 'temporada';
  */
 export const HALLOWEEN_HERO_URL = '/img/trabajos/catrina-media-cara-960.webp';
 
-/** Categorías que tienen al menos una foto, en el orden de siempre. */
-export const categoriesWithPhotos = (photos) =>
-  PORTFOLIO_CATEGORIES.filter((c) => photos.some((p) => p.category === c.id));
+/**
+ * Categorías que tienen al menos una foto, en el orden de los filtros.
+ * `categories` sale de usePhotos (incluye las que Yury creó en el panel).
+ */
+export const categoriesWithPhotos = (photos, categories = PORTFOLIO_CATEGORIES) =>
+  categories.filter((c) => photos.some((p) => p.category === c.id));
 
 /**
  * Fotos de una categoría, o de "Todos" si `category` está vacía. En

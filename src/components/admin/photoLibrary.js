@@ -7,16 +7,34 @@ import usePhotos, { refreshPhotos } from '../../hooks/usePhotos.js';
  * selector de fotos y los editores de servicios, ocasiones y ajustes.
  */
 
-/** Las mismas categorías de «Mi trabajo», con los mismos nombres. */
-export const PHOTO_CATEGORIES = PORTFOLIO_CATEGORIES;
-export const CATEGORY_LABEL = Object.fromEntries(PHOTO_CATEGORIES.map((c) => [c.id, c.label]));
+// ── Categorías ───────────────────────────────────────────────────────
+//
+// Son las mismas de «Mi trabajo» y llegan con la biblioteca
+// (loadPhotoLibrary → categories): las cuatro de siempre y las que Yury
+// crea al subir fotos. Sin conexión, las de siempre.
 
 /** Filtros del panel: todas, cada categoría y las que aún no tienen. */
-export const PHOTO_FILTERS = [
+export const photoFilters = (categories) => [
   { id: 'all', label: 'Todas' },
-  ...PHOTO_CATEGORIES,
+  ...categories,
   { id: 'none', label: 'Sin categoría' },
 ];
+
+export const categoryLabel = (categories, id) => categories.find((c) => c.id === id)?.label ?? id;
+
+/** La categoría del filtro puesto, o null si es «Todas» / «Sin categoría». */
+export const categoryOfFilter = (categories, filter) => (categories.some((c) => c.id === filter) ? filter : null);
+
+/**
+ * Crea una categoría nueva y devuelve { category: { id, label }, created }.
+ * Si ya había una con ese nombre, el servidor devuelve esa (created =
+ * false): no se duplica.
+ */
+export async function createPhotoCategory(label) {
+  const { category, created } = await api.post('/photos/admin/categories', { label });
+  invalidatePhotoLibrary();
+  return { category, created: Boolean(created) };
+}
 
 export function filterPhotos(photos, filter) {
   if (filter === 'all') return photos;
@@ -76,22 +94,28 @@ const OFFLINE_LIBRARY = PORTFOLIO.map((photo, index) => ({
   offline: true,
 }));
 
+/** Las categorías de una respuesta de la API; si no vienen, las de siempre. */
+export function categoriesOf(data) {
+  const list = Array.isArray(data?.categories) ? data.categories.filter((c) => c?.id && c?.label) : [];
+  return list.length > 0 ? list : PORTFOLIO_CATEGORIES;
+}
+
 let cache = null; // { at, promise }
 const CACHE_MS = 60_000;
 
 /**
  * Todas las fotos (también las que no salen en «Mi trabajo»), con
- * `usedBy`. Se guarda un minuto para no pedirlas cada vez que se abre el
- * selector. Devuelve { photos, offline }.
+ * `usedBy`, y las categorías. Se guarda un minuto para no pedirlas cada
+ * vez que se abre el selector. Devuelve { photos, categories, offline }.
  */
 export function loadPhotoLibrary({ force = false } = {}) {
   if (!force && cache && Date.now() - cache.at < CACHE_MS) return cache.promise;
   const promise = api
     .get('/photos/admin')
-    .then((data) => ({ photos: data?.photos ?? [], offline: false }))
+    .then((data) => ({ photos: data?.photos ?? [], categories: categoriesOf(data), offline: false }))
     .catch(() => {
       cache = null;
-      return { photos: OFFLINE_LIBRARY, offline: true };
+      return { photos: OFFLINE_LIBRARY, categories: PORTFOLIO_CATEGORIES, offline: true };
     });
   cache = { at: Date.now(), promise };
   return promise;

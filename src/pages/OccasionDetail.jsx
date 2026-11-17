@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
-import { PORTFOLIO_CATEGORIES } from '../data/portfolio.js';
 import { longDate } from '../lib/format.js';
 import {
   DATE_OCCASIONS,
@@ -26,7 +25,7 @@ import { Button, LoadingBlock, EmptyState, Reveal } from '../components/ui/index
 export default function OccasionDetail() {
   const { slug } = useParams();
   const settings = useSettings();
-  const { photos: library, byUrl } = usePhotos();
+  const { photos: library, categories, byUrl } = usePhotos();
   const [occasion, setOccasion] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -133,7 +132,7 @@ export default function OccasionDetail() {
 
   // Trabajos reales de la biblioteca, de la categoría que va con la ocasión.
   const gallery = photosForOccasion(library, occasion.slug).slice(0, 6);
-  const galleryLabel = PORTFOLIO_CATEGORIES.find((c) => c.id === categoryForOccasion(occasion.slug))?.label;
+  const galleryLabel = categories.find((c) => c.id === categoryForOccasion(occasion.slug))?.label;
 
   return (
     <article className="pb-20">

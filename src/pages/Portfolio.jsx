@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { PORTFOLIO_CATEGORIES } from '../data/portfolio.js';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { whatsappLink } from '../lib/format.js';
 import { SectionTitle, EmptyState, Button, Reveal, cx } from '../components/ui/index.jsx';
@@ -22,12 +21,12 @@ import { firstName, instagramHandle } from '../components/home/contactInfo.js';
  */
 export default function Portfolio() {
   const settings = useSettings();
-  const { photos: library, loading } = usePhotos();
+  const { photos: library, categories, loading } = usePhotos();
   const [searchParams, setSearchParams] = useSearchParams();
   const inSeason = settings.theme === 'HALLOWEEN';
 
   const requested = searchParams.get('categoria') ?? '';
-  const category = PORTFOLIO_CATEGORIES.some((c) => c.id === requested) ? requested : '';
+  const category = categories.some((c) => c.id === requested) ? requested : '';
 
   const photos = useMemo(() => photosFor(library, category, { inSeason }), [library, category, inSeason]);
 
@@ -35,7 +34,7 @@ export default function Portfolio() {
   // ocultan las de menores, Quinceañeras puede quedar vacía).
   const filters = [
     { id: '', label: 'Todos' },
-    ...categoriesWithPhotos(library),
+    ...categoriesWithPhotos(library, categories),
   ];
 
   const setCategory = (value) => {

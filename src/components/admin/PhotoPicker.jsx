@@ -4,7 +4,16 @@ import { imageSources } from '../../lib/images.js';
 import { Alert, Badge, Button, Checkbox, LoadingBlock, cx } from '../ui/index.jsx';
 import Sheet from './Sheet.jsx';
 import { UploadDropzone, UploadList, useUploads } from './PhotoUploader.jsx';
-import { DEFAULT_FOCUS, PHOTO_FILTERS, filterPhotos, invalidatePhotoLibrary, loadPhotoLibrary } from './photoLibrary.js';
+import { PORTFOLIO_CATEGORIES } from '../../data/portfolio.js';
+import {
+  DEFAULT_FOCUS,
+  categoryLabel,
+  categoryOfFilter,
+  filterPhotos,
+  invalidatePhotoLibrary,
+  loadPhotoLibrary,
+  photoFilters,
+} from './photoLibrary.js';
 
 /**
  * Selector de fotos del panel.
@@ -32,7 +41,7 @@ export default function PhotoPicker({
   title,
   description,
 }) {
-  const [library, setLibrary] = useState({ photos: [], offline: false, loading: true });
+  const [library, setLibrary] = useState({ photos: [], categories: PORTFOLIO_CATEGORIES, offline: false, loading: true });
   const [config, setConfig] = useState(null);
   const [filter, setFilter] = useState('all');
   const [chosen, setChosen] = useState([]); // ids, en el orden en que se tocaron
@@ -68,7 +77,7 @@ export default function PhotoPicker({
   });
 
   const visible = filterPhotos(library.photos, filter);
-  const category = PHOTO_FILTERS.some((f) => f.id === filter) && !['all', 'none'].includes(filter) ? filter : null;
+  const category = categoryOfFilter(library.categories, filter);
 
   function confirm() {
     const byId = new Map(library.photos.map((p) => [p.id, p]));
@@ -127,7 +136,7 @@ export default function PhotoPicker({
               label="Mostrarla también en Mi trabajo"
               description={
                 category
-                  ? `Quedará en la categoría ${PHOTO_FILTERS.find((f) => f.id === category)?.label}.`
+                  ? `Quedará en la categoría ${categoryLabel(library.categories, category)}.`
                   : 'Luego le pones categoría y descripción en Panel → Fotos.'
               }
               checked={inGallery}
@@ -156,7 +165,7 @@ export default function PhotoPicker({
           </Alert>
         )}
 
-        <FilterChips value={filter} onChange={setFilter} photos={library.photos} />
+        <FilterChips value={filter} onChange={setFilter} photos={library.photos} categories={library.categories} />
 
         {library.loading ? (
           <LoadingBlock label="Cargando fotos…" className="py-10" />
@@ -227,10 +236,10 @@ export default function PhotoPicker({
 }
 
 /** Filtro por categoría, con cuántas fotos hay en cada una. */
-export function FilterChips({ value, onChange, photos, label = 'Filtrar por categoría' }) {
+export function FilterChips({ value, onChange, photos, categories, label = 'Filtrar por categoría' }) {
   return (
     <div role="group" aria-label={label} className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-      {PHOTO_FILTERS.map((f) => {
+      {photoFilters(categories).map((f) => {
         const count = filterPhotos(photos, f.id).length;
         if (f.id === 'none' && count === 0 && value !== 'none') return null;
         const active = value === f.id;

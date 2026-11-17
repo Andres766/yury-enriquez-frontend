@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
-import { PORTFOLIO, SHOW_MINORS } from '../data/portfolio.js';
+import { PORTFOLIO, PORTFOLIO_CATEGORIES, SHOW_MINORS } from '../data/portfolio.js';
 
 /**
  * La biblioteca de fotos del sitio (Panel → Fotos).
@@ -9,6 +9,8 @@ import { PORTFOLIO, SHOW_MINORS } from '../data/portfolio.js';
  * galería, el inicio, las fichas y las tarjetas la comparten sin repetir
  * la petición. Todas las fotos llegan con la misma forma:
  *   { id, url, width, height, alt, category, featured, focus, credit, minor }
+ * y, junto con ellas, las categorías de la galería ([{ id, label }], en
+ * el orden de los filtros), que Yury también puede crear desde el panel.
  *
  * Respaldo: si la API no responde o devuelve la lista vacía, se usan las
  * fotos que vienen con la web (data/portfolio.js). Así la galería nunca
@@ -43,8 +45,14 @@ export function photoKey(url) {
   return String(url ?? '').replace(/^(\/img\/trabajos\/.+)-480\.webp$/, '$1-960.webp');
 }
 
-function snapshot(photos, error = null, fromApi = false) {
-  return { photos, byUrl: new Map(photos.map((photo) => [photoKey(photo.url), photo])), error, fromApi };
+function snapshot(photos, error = null, fromApi = false, categories = PORTFOLIO_CATEGORIES) {
+  return { photos, categories, byUrl: new Map(photos.map((photo) => [photoKey(photo.url), photo])), error, fromApi };
+}
+
+/** Las categorías que manda la API; si no llegan bien, las de siempre. */
+function categoriesFrom(data) {
+  const list = Array.isArray(data?.categories) ? data.categories.filter((c) => c?.id && c?.label) : [];
+  return list.length > 0 ? list : PORTFOLIO_CATEGORIES;
 }
 
 const FALLBACK = snapshot(STATIC_PHOTOS);
@@ -78,7 +86,7 @@ function load() {
         const photos = (Array.isArray(data?.photos) ? data.photos : []).filter(
           (photo) => photo?.url && (SHOW_MINORS || !photo.minor),
         );
-        return { ok: photos.length > 0 ? snapshot(photos, null, true) : FALLBACK };
+        return { ok: photos.length > 0 ? snapshot(photos, null, true, categoriesFrom(data)) : FALLBACK };
       })
       .catch((error) => ({ failed: snapshot(STATIC_PHOTOS, error) }))
       .then(({ ok, failed }) => {
@@ -108,7 +116,7 @@ export function refreshPhotos() {
 }
 
 /**
- * { photos, byUrl, loading, error }. Mientras carga, `photos` está
+ * { photos, categories, byUrl, loading, error }. Mientras carga, `photos` está
  * vacía y `loading` es true: quien pinta la galería pone su esqueleto en
  * vez de mostrar fotos que quizás Yury ya quitó.
  */
@@ -129,6 +137,6 @@ export default function usePhotos() {
     };
   }, []);
 
-  if (!state) return { photos: [], byUrl: FALLBACK.byUrl, loading: true, error: null };
-  return { photos: state.photos, byUrl: state.byUrl, loading: false, error: state.error };
+  if (!state) return { photos: [], categories: FALLBACK.categories, byUrl: FALLBACK.byUrl, loading: true, error: null };
+  return { photos: state.photos, categories: state.categories, byUrl: state.byUrl, loading: false, error: state.error };
 }

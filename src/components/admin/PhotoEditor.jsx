@@ -4,7 +4,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { Alert, Button, Checkbox, Input, Select, Textarea } from '../ui/index.jsx';
 import FocusPicker from './FocusPicker.jsx';
 import Sheet from './Sheet.jsx';
-import { DEFAULT_FOCUS, PHOTO_CATEGORIES, invalidatePhotoLibrary, usedByLabel } from './photoLibrary.js';
+import { DEFAULT_FOCUS, invalidatePhotoLibrary, usedByLabel } from './photoLibrary.js';
 
 /**
  * Editar una foto de la biblioteca: descripción, categoría, dónde sale,
@@ -22,7 +22,7 @@ const toForm = (photo) => ({
   focus: photo.focus || DEFAULT_FOCUS,
 });
 
-export default function PhotoEditor({ photo, open, onClose, onSaved, onDelete }) {
+export default function PhotoEditor({ photo, categories, open, onClose, onSaved, onDelete }) {
   const toast = useToast();
   const [form, setForm] = useState(() => (photo ? toForm(photo) : null));
   const [errors, setErrors] = useState({});
@@ -123,7 +123,7 @@ export default function PhotoEditor({ photo, open, onClose, onSaved, onDelete })
 
           <Select label="Categoría" value={form.category} onChange={set('category')} error={errors.category}>
             <option value="">Sin categoría</option>
-            {PHOTO_CATEGORIES.map((c) => (
+            {categories.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.label}
               </option>

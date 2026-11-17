@@ -3,16 +3,18 @@ import { api, ApiError } from '../../lib/api.js';
 import { getMediaConfig } from '../../lib/cloudinary.js';
 import { imageSources } from '../../lib/images.js';
 import { useToast } from '../../context/ToastContext.jsx';
-import { Alert, Badge, Button, EmptyState, LoadingBlock, Select, cx } from '../../components/ui/index.jsx';
+import { Alert, Badge, Button, EmptyState, Input, LoadingBlock, Select, cx } from '../../components/ui/index.jsx';
 import PhotoEditor from '../../components/admin/PhotoEditor.jsx';
 import Sheet from '../../components/admin/Sheet.jsx';
 import { FilterChips } from '../../components/admin/PhotoPicker.jsx';
 import { UploadDropzone, UploadList, useUploads } from '../../components/admin/PhotoUploader.jsx';
+import { PORTFOLIO_CATEGORIES } from '../../data/portfolio.js';
 import {
-  CATEGORY_LABEL,
   DEFAULT_FOCUS,
-  PHOTO_CATEGORIES,
-  PHOTO_FILTERS,
+  categoriesOf,
+  categoryLabel,
+  categoryOfFilter,
+  createPhotoCategory,
   filterPhotos,
   invalidatePhotoLibrary,
   loadPhotoLibrary,
@@ -23,8 +25,9 @@ import {
  * Panel → Fotos.
  *
  * Todas las fotos de la web en un solo sitio: Yury las sube desde el
- * celular, les pone descripción y categoría, elige el encuadre, las
- * ordena (el orden de aquí es el de «Mi trabajo») y las borra.
+ * celular, les pone descripción y categoría (o crea una categoría nueva
+ * al subirlas), elige el encuadre, las ordena (el orden de aquí es el de
+ * «Mi trabajo») y las borra.
  *
  * Orden: en el computador se arrastran; en el celular, y con teclado,
  * con los botones de antes/después (o Alt + flecha arriba/abajo). Cada movimiento se
@@ -33,6 +36,9 @@ import {
  */
 
 const SAVE_DELAY_MS = 700;
+
+/** Opción del selector de categoría que abre el campo para crear una. */
+const NEW_CATEGORY = '__nueva__';
 
 /** Reordena `list` según `ids`; lo que no esté en `ids` queda al final. */
 function sortByIds(list, ids) {
@@ -64,7 +70,9 @@ export default function PhotosAdmin() {
   const [status, setStatus] = useState('loading'); // loading | ready | failed
   const [config, setConfig] = useState(null);
   const [filter, setFilter] = useState('all');
+  const [categories, setCategories] = useState(PORTFOLIO_CATEGORIES);
   const [uploadCategory, setUploadCategory] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [removing, setRemoving] = useState(null); // { photo, usedBy, stage, busy }
   const [announcement, setAnnouncement] = useState('');
@@ -101,6 +109,7 @@ export default function PhotosAdmin() {
     if (list.status === 'fulfilled') {
       const loaded = list.value?.photos ?? [];
       setPhotos(loaded);
+      setCategories(categoriesOf(list.value));
       committed.current = loaded.map((p) => p.id);
       setStatus('ready');
     } else {
@@ -244,9 +253,19 @@ export default function PhotosAdmin() {
 
   // Si Yury está mirando una categoría, lo que suba va a esa categoría.
   useEffect(() => {
-    if (PHOTO_CATEGORIES.some((c) => c.id === filter)) setUploadCategory(filter);
+    const category = categoryOfFilter(categories, filter);
+    if (category) setUploadCategory(category);
     else if (filter === 'none') setUploadCategory('');
-  }, [filter]);
+  }, [filter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function onCategoryCreated(category, created) {
+    setCategories((list) => (list.some((c) => c.id === category.id) ? list : [...list, category]));
+    setUploadCategory(category.id);
+    setCreatingCategory(false);
+    announce(`Categoría «${category.label}» elegida para las fotos nuevas.`);
+    if (created) toast.success(`Categoría «${category.label}» creada. Saldrá en Mi trabajo cuando tenga fotos.`);
+    else toast.info(`Ya tenías la categoría «${category.label}»: quedó elegida.`);
+  }
 
   // ── Editar y borrar ────────────────────────────────────────────────
 
@@ -361,17 +380,28 @@ export default function PhotosAdmin() {
           </h2>
           <Select
             label="Categoría de las fotos nuevas"
-            value={uploadCategory}
-            onChange={(e) => setUploadCategory(e.target.value)}
+            value={creatingCategory ? NEW_CATEGORY : uploadCategory}
+            onChange={(e) => {
+              if (e.target.value === NEW_CATEGORY) {
+                setCreatingCategory(true);
+              } else {
+                setCreatingCategory(false);
+                setUploadCategory(e.target.value);
+              }
+            }}
             className="mb-4 max-w-sm"
           >
             <option value="">Sin categoría (la pongo después)</option>
-            {PHOTO_CATEGORIES.map((c) => (
+            {categories.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.label}
               </option>
             ))}
+            <option value={NEW_CATEGORY}>+ Crear una categoría nueva…</option>
           </Select>
+          {creatingCategory && (
+            <NewCategoryForm onCreated={onCategoryCreated} onCancel={() => setCreatingCategory(false)} />
+          )}
           <UploadDropzone
             onFiles={(files) => uploads.add(files, uploadCategory ? { category: uploadCategory } : {})}
             hint="Puedes elegir varias a la vez, desde la cámara o la galería del celular. Las achicamos antes de subirlas para que no gasten tantos datos."
@@ -393,7 +423,7 @@ export default function PhotosAdmin() {
             )}
           </div>
 
-          <FilterChips value={filter} onChange={setFilter} photos={photos} />
+          <FilterChips value={filter} onChange={setFilter} photos={photos} categories={categories} />
 
           <p id="reorder-help" className="hint-text mb-3">
             Toca una foto para editarla. Para cambiar el orden usa las flechas de cada foto
@@ -407,7 +437,7 @@ export default function PhotosAdmin() {
             />
           ) : visible.length === 0 ? (
             <p className="rounded-xl border border-dashed border-line p-4 text-sm text-ink-500">
-              No hay fotos en «{PHOTO_FILTERS.find((f) => f.id === filter)?.label}» todavía.
+              No hay fotos en «{filter === 'none' ? 'Sin categoría' : categoryLabel(categories, filter)}» todavía.
             </p>
           ) : (
             <ol ref={gridRef} className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
@@ -415,6 +445,7 @@ export default function PhotosAdmin() {
                 <PhotoTile
                   key={photo.id}
                   photo={photo}
+                  categoryName={photo.category ? categoryLabel(categories, photo.category) : 'Sin categoría'}
                   position={index + 1}
                   total={visible.length}
                   draggable={canDrag}
@@ -451,6 +482,7 @@ export default function PhotosAdmin() {
 
       <PhotoEditor
         photo={editing}
+        categories={categories}
         open={Boolean(editing)}
         onClose={() => setEditingId(null)}
         onSaved={onSaved}
@@ -462,7 +494,7 @@ export default function PhotosAdmin() {
   );
 }
 
-function PhotoTile({ photo, position, total, draggable, dragging, over, onEdit, onMove, onDragStart, onDragOver, onDrop, onDragEnd }) {
+function PhotoTile({ photo, categoryName, position, total, draggable, dragging, over, onEdit, onMove, onDragStart, onDragOver, onDrop, onDragEnd }) {
   const { src, srcSet } = imageSources(photo.url, { widths: [320, 640], fallback: 640 });
   const label = shortAlt(photo);
   const missingAlt = !(photo.alt ?? '').trim();
@@ -527,7 +559,7 @@ function PhotoTile({ photo, position, total, draggable, dragging, over, onEdit, 
       <div className="flex items-center gap-1 px-1.5 py-1">
         <MoveButton id={photo.id} direction={-1} disabled={position === 1} label={`Mover antes: ${label}`} onClick={() => onMove(-1)} />
         <span className="min-w-0 flex-1 truncate text-center text-xs text-ink-500" aria-hidden="true">
-          {position} · {photo.category ? CATEGORY_LABEL[photo.category] : 'Sin categoría'}
+          {position} · {categoryName}
         </span>
         <MoveButton id={photo.id} direction={1} disabled={position === total} label={`Mover después: ${label}`} onClick={() => onMove(1)} />
       </div>
@@ -537,6 +569,70 @@ function PhotoTile({ photo, position, total, draggable, dragging, over, onEdit, 
         </p>
       )}
     </li>
+  );
+}
+
+/**
+ * Crear una categoría desde la subida: un nombre y listo. El servidor
+ * arma el id de la URL (?categoria=…) y, si ya hay una con ese nombre,
+ * devuelve esa en vez de duplicarla.
+ */
+function NewCategoryForm({ onCreated, onCancel }) {
+  const toast = useToast();
+  const [label, setLabel] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    const name = label.trim().replace(/\s+/g, ' ');
+    if (name.length < 2) {
+      setError('Escribe un nombre de al menos 2 letras.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const { category, created } = await createPhotoCategory(name);
+      onCreated(category, created);
+    } catch (err) {
+      if (err instanceof ApiError && err.details?.length) {
+        setError(err.fieldErrors.label ?? err.message);
+      } else {
+        toast.error(err instanceof ApiError && err.status === 0 ? 'Sin conexión: no se creó la categoría.' : err.message);
+      }
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} noValidate className="mb-4 max-w-sm rounded-xl border border-dashed border-brand-300 p-3">
+      <Input
+        label="Nombre de la categoría nueva"
+        required
+        autoFocus
+        maxLength={40}
+        value={label}
+        onChange={(e) => {
+          setLabel(e.target.value);
+          if (error) setError('');
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onCancel();
+        }}
+        error={error}
+        placeholder="Ej.: Sesión de fotos"
+        hint="Así se verá en los filtros de Mi trabajo."
+      />
+      <div className="mt-3 flex gap-2">
+        <Button type="submit" size="sm" loading={busy}>
+          Crear categoría
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={onCancel} disabled={busy}>
+          Cancelar
+        </Button>
+      </div>
+    </form>
   );
 }
 
