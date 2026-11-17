@@ -6,7 +6,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { Alert, Badge, Button, EmptyState, Input, LoadingBlock, Select, cx } from '../../components/ui/index.jsx';
 import PhotoEditor from '../../components/admin/PhotoEditor.jsx';
 import Sheet from '../../components/admin/Sheet.jsx';
-import { FilterChips } from '../../components/admin/PhotoPicker.jsx';
+import { FilterChips, MULTI_HINT } from '../../components/admin/PhotoPicker.jsx';
 import { UploadDropzone, UploadList, useUploads } from '../../components/admin/PhotoUploader.jsx';
 import { PORTFOLIO_CATEGORIES } from '../../data/portfolio.js';
 import {
@@ -404,7 +404,7 @@ export default function PhotosAdmin() {
           )}
           <UploadDropzone
             onFiles={(files) => uploads.add(files, uploadCategory ? { category: uploadCategory } : {})}
-            hint="Puedes elegir varias a la vez, desde la cámara o la galería del celular. Las achicamos antes de subirlas para que no gasten tantos datos."
+            hint={`${MULTI_HINT} Las achicamos antes de subirlas para que no gasten tantos datos.`}
           />
           <UploadList items={uploads.items} onRetry={uploads.retry} onDismiss={uploads.dismiss} />
         </section>

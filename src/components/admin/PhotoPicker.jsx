@@ -29,6 +29,10 @@ import {
  * ya están puestas: se marcan «Ya está» y no se pueden volver a elegir.
  */
 
+/** En la galería del celular, elegir varias casi siempre empieza con un toque largo. */
+export const MULTI_HINT =
+  'Puedes elegir varias a la vez: en el celular, mantén presionada la primera foto y luego toca las demás.';
+
 const toPick = (photo) => ({ url: photo.url, alt: photo.alt ?? '', focus: photo.focus || DEFAULT_FOCUS, photo });
 
 export default function PhotoPicker({
@@ -72,7 +76,14 @@ export default function PhotoPicker({
       invalidatePhotoLibrary();
       setLibrary((l) => ({ ...l, photos: [...l.photos, { ...photo, usedBy: [] }] }));
       // La recién subida queda elegida: es casi seguro la que se quería.
-      select(photo);
+      // Si se eligen una sola foto y suben varias, se marca la primera que
+      // termine y las demás no le quitan la marca (ni a la que Yury toque
+      // mientras suben): quedan en la biblioteca para tocarlas si quiere.
+      setChosen((ids) => {
+        if (!multiple) return ids.length > 0 ? ids : [photo.id];
+        if (ids.includes(photo.id) || ids.length >= max) return ids;
+        return [...ids, photo.id];
+      });
     },
   });
 
@@ -99,7 +110,7 @@ export default function PhotoPicker({
         description ??
         (multiple
           ? `Toca las fotos que quieras añadir${Number.isFinite(max) ? ` (hasta ${max})` : ''}.`
-          : 'Toca una foto de tu biblioteca o sube una nueva.')
+          : 'Toca una foto de tu biblioteca o sube nuevas.')
       }
       footer={
         <>
@@ -117,15 +128,15 @@ export default function PhotoPicker({
       }
     >
       {/* ── Subir una nueva ── */}
-      <section aria-label="Subir una foto nueva" className="mb-6">
+      <section aria-label="Subir fotos nuevas" className="mb-6">
         {config?.enabled ? (
           <>
             <UploadDropzone
               compact
-              multiple={multiple}
-              label={multiple ? 'Subir fotos nuevas' : 'Subir una foto nueva'}
+              label="Subir fotos nuevas"
+              hint={MULTI_HINT}
               onFiles={(files) =>
-                uploads.add(multiple ? files : [...files].slice(0, 1), {
+                uploads.add(files, {
                   inGallery,
                   ...(category ? { category } : {}),
                 })
@@ -133,7 +144,7 @@ export default function PhotoPicker({
             />
             <Checkbox
               className="mt-3"
-              label="Mostrarla también en Mi trabajo"
+              label="Mostrar también en Mi trabajo"
               description={
                 category
                   ? `Quedará en la categoría ${categoryLabel(library.categories, category)}.`
