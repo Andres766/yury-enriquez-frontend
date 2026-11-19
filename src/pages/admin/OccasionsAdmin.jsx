@@ -22,10 +22,24 @@ import {
  * servicios salen en cada ocasión se decide desde la ficha de cada
  * servicio, para no tener la misma relación en dos sitios.
  *
- * No se crean ni se borran ocasiones desde aquí: la dirección (slug) de
- * cada una ya circula en enlaces de Instagram y WhatsApp, y borrarla los
- * rompería. Para dejar de mostrar una, se oculta.
+ * Yury también crea las suyas («Nueva ocasión»). La dirección (slug) se
+ * arma con el nombre al crearla y después no cambia aunque la renombre:
+ * ya puede estar en enlaces de Instagram y WhatsApp. Borrar solo se
+ * puede si no tiene reservas; si las tiene, se oculta.
  */
+
+/** Ocasión vacía para el formulario de «Nueva ocasión». */
+const NEW_OCCASION = { name: '', tagline: '', description: '', includes: [], heroImage: '', sortOrder: '', active: true, services: [] };
+
+/** Vista previa de la dirección: el servidor arma la definitiva igual. */
+const slugPreview = (name) =>
+  name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 56);
 export default function OccasionsAdmin() {
   const toast = useToast();
   const [occasions, setOccasions] = useState([]);
@@ -62,22 +76,29 @@ export default function OccasionsAdmin() {
 
   return (
     <div>
-      <header className="mb-6">
-        <h1 className="text-3xl">Ocasiones</h1>
-        <p className="mt-1.5 text-sm text-ink-500">
-          {occasions.length} en total · {occasions.filter((o) => o.active).length} visibles en la web. Los
-          servicios de cada una se eligen en{' '}
-          <Link to="/admin/servicios" className="font-medium text-brand-700 underline-offset-4 hover:underline">
-            Servicios
-          </Link>
-          .
-        </p>
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl">Ocasiones</h1>
+          <p className="mt-1.5 text-sm text-ink-500">
+            {occasions.length} en total · {occasions.filter((o) => o.active).length} visibles en la web. Los
+            servicios de cada una se eligen en{' '}
+            <Link to="/admin/servicios" className="font-medium text-brand-700 underline-offset-4 hover:underline">
+              Servicios
+            </Link>
+            .
+          </p>
+        </div>
+        <Button onClick={() => setEditing(NEW_OCCASION)}>+ Nueva ocasión</Button>
       </header>
 
       {failed ? (
         <Alert tone="error">No pudimos cargar las ocasiones. Revisa la conexión y recarga la página.</Alert>
       ) : occasions.length === 0 ? (
-        <EmptyState title="Aún no hay ocasiones" description="Las ocasiones se crean con los datos iniciales del sitio." />
+        <EmptyState
+          title="Aún no hay ocasiones"
+          description="Crea la primera con «Nueva ocasión»."
+          action={<Button onClick={() => setEditing(NEW_OCCASION)}>+ Nueva ocasión</Button>}
+        />
       ) : (
         <ul className="space-y-3">
           {occasions.map((occasion) => (
@@ -164,6 +185,9 @@ export default function OccasionsAdmin() {
 
 function OccasionForm({ occasion, onClose, onSaved }) {
   const toast = useToast();
+  const isNew = !occasion.id;
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState({
     name: occasion.name ?? '',
     tagline: occasion.tagline ?? '',
@@ -210,13 +234,24 @@ function OccasionForm({ occasion, onClose, onSaved }) {
       heroImage: form.heroImage.trim(),
       // Vacío = automático (el servicio más barato de la ocasión).
       priceFromCents: pesos ? pesos * 100 : null,
-      sortOrder: Number(form.sortOrder) || 0,
+      // Vacío en una nueva = la pone de última.
+      sortOrder: form.sortOrder === '' ? undefined : Number(form.sortOrder) || 0,
       active: form.active,
     };
 
     try {
-      await api.patch(`/occasions/admin/${occasion.id}`, payload);
-      toast.success('Ocasión actualizada.');
+      if (isNew) {
+        await api.post('/occasions/admin', payload);
+        toast.success(
+          form.active
+            ? 'Ocasión creada. Para que muestre servicios, márcala en «Ocasiones para las que aplica» de cada servicio.'
+            : 'Ocasión creada (oculta). Publícala cuando esté lista.',
+          8000,
+        );
+      } else {
+        await api.patch(`/occasions/admin/${occasion.id}`, payload);
+        toast.success('Ocasión actualizada.');
+      }
       onSaved();
     } catch (error) {
       if (error instanceof ApiError && error.details?.length) {
@@ -227,6 +262,19 @@ function OccasionForm({ occasion, onClose, onSaved }) {
       }
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function remove() {
+    setDeleting(true);
+    try {
+      await api.delete(`/occasions/admin/${occasion.id}`);
+      toast.success(`«${occasion.name}» se borró.`);
+      onSaved();
+    } catch (error) {
+      toast.error(error.message, 9000);
+      setConfirmDelete(false);
+      setDeleting(false);
     }
   }
 
@@ -247,7 +295,7 @@ function OccasionForm({ occasion, onClose, onSaved }) {
       <motion.div
         role="dialog"
         aria-modal="true"
-        aria-label={`Editar ${occasion.name}`}
+        aria-label={isNew ? 'Nueva ocasión' : `Editar ${occasion.name}`}
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 16 }}
@@ -255,8 +303,12 @@ function OccasionForm({ occasion, onClose, onSaved }) {
       >
         <header className="flex items-center justify-between gap-4 border-b border-line px-5 py-4">
           <div className="min-w-0">
-            <h2 className="font-display text-2xl text-ink-800">Editar ocasión</h2>
-            <p className="truncate text-xs text-ink-400">Dirección: /ocasiones/{occasion.slug}</p>
+            <h2 className="font-display text-2xl text-ink-800">{isNew ? 'Nueva ocasión' : 'Editar ocasión'}</h2>
+            <p className="truncate text-xs text-ink-400">
+              {isNew
+                ? `Dirección: /ocasiones/${slugPreview(form.name) || '…'} (sale del nombre y no cambia después)`
+                : `Dirección: /ocasiones/${occasion.slug}`}
+            </p>
           </div>
           <button
             type="button"
@@ -365,12 +417,38 @@ function OccasionForm({ occasion, onClose, onSaved }) {
           )}
         </form>
 
+        {confirmDelete && (
+          <div className="border-t border-red-200 bg-red-50 px-5 py-4" role="alertdialog" aria-label="Confirmar borrado">
+            <p className="text-sm text-red-900">
+              ¿Borrar «{occasion.name}»? Se quita de la web y no se puede deshacer. Los servicios no se borran: solo
+              dejan de estar en esta ocasión. Si tiene reservas no se podrá borrar; en ese caso ocúltala.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <Button size="sm" variant="danger" loading={deleting} onClick={remove}>
+                Sí, borrarla
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setConfirmDelete(false)} disabled={deleting}>
+                No, dejarla
+              </Button>
+            </div>
+          </div>
+        )}
+
         <footer className="flex gap-3 border-t border-line bg-cream px-5 py-4">
-          <Button variant="ghost" onClick={onClose} className="flex-1 sm:flex-none">
+          {!isNew && !confirmDelete && (
+            <Button
+              variant="ghost"
+              onClick={() => setConfirmDelete(true)}
+              className="text-red-700 hover:bg-red-50 hover:text-red-800"
+            >
+              Borrar
+            </Button>
+          )}
+          <Button variant="ghost" onClick={onClose} className="flex-1 sm:ml-auto sm:flex-none">
             Cancelar
           </Button>
           <Button onClick={submit} loading={saving} className="flex-1">
-            Guardar cambios
+            {isNew ? 'Crear ocasión' : 'Guardar cambios'}
           </Button>
         </footer>
       </motion.div>
