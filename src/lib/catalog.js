@@ -107,16 +107,23 @@ export function waHref(settings, kind, context) {
 
 // ── Precio de una ocasión ────────────────────────────────────────────
 
+/** El servicio más barato con precio publicado (los de "cotizar" no cuentan). */
+export function cheapestPricedService(services = []) {
+  const priced = services.filter((s) => s.active !== false && !priceLabel(s).isQuote && s.priceCents > 0);
+  if (priced.length === 0) return null;
+  return priced.reduce((min, s) => (s.priceCents < min.priceCents ? s : min));
+}
+
 /**
- * "Desde $85.000": el precio más bajo entre los servicios de la ocasión
- * que tienen precio publicado (los de "cotizar" no cuentan). Es un dato
+ * "Desde $85.000" de una ocasión. Si Yury lo escribió en Panel →
+ * Ocasiones (priceFromCents), manda ese; si no, el precio más bajo entre
+ * los servicios de la ocasión que tienen precio publicado. Es un dato
  * cierto aunque todos sean de precio fijo.
  */
-export function occasionPriceFrom(services = []) {
-  const priced = services.filter((s) => !priceLabel(s).isQuote && s.priceCents > 0);
-  if (priced.length === 0) return null;
-  const cheapest = priced.reduce((min, s) => (s.priceCents < min.priceCents ? s : min));
-  return `Desde ${money(cheapest.priceCents, cheapest.currency)}`;
+export function occasionPriceFrom(services = [], { priceFromCents } = {}) {
+  if (priceFromCents > 0) return `Desde ${money(priceFromCents)}`;
+  const cheapest = cheapestPricedService(services);
+  return cheapest ? `Desde ${money(cheapest.priceCents, cheapest.currency)}` : null;
 }
 
 /** Días que se puede reservar en línea este servicio. */

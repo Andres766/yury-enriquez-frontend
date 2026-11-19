@@ -73,7 +73,7 @@ export default function OccasionDetail() {
   }
 
   const services = occasion.services ?? [];
-  const priceFrom = occasionPriceFrom(services);
+  const priceFrom = occasionPriceFrom(services, occasion);
   const bookingTo = bookingPath({ occasion: occasion.slug });
   const hero = occasion.heroImage && !isHiddenPhoto(occasion.heroImage) ? occasion.heroImage : null;
 

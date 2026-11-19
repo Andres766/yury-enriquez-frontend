@@ -8,6 +8,8 @@ import IncludesEditor from '../../components/catalog/IncludesEditor.jsx';
 import { focusFor } from '../../components/portfolio/photoImage.js';
 import PhotoField from '../../components/admin/PhotoField.jsx';
 import { useLibraryByUrl } from '../../components/admin/photoLibrary.js';
+import { cheapestPricedService, occasionPriceFrom } from '../../lib/catalog.js';
+import { money } from '../../lib/format.js';
 import {
   Button, Input, Textarea, Checkbox, Badge, LoadingBlock, EmptyState, Alert, cx,
 } from '../../components/ui/index.jsx';
@@ -105,6 +107,11 @@ export default function OccasionsAdmin() {
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-medium text-ink-800">{occasion.name}</p>
                   {!occasion.active && <Badge tone="outline">Oculta</Badge>}
+                  {occasionPriceFrom(occasion.services, occasion) && (
+                    <Badge tone={occasion.priceFromCents ? 'gold' : 'neutral'}>
+                      {occasionPriceFrom(occasion.services, occasion)}
+                    </Badge>
+                  )}
                 </div>
                 <p className="mt-1 truncate text-sm text-ink-500">{occasion.tagline}</p>
                 <p className="mt-0.5 text-xs text-ink-400">
@@ -163,6 +170,7 @@ function OccasionForm({ occasion, onClose, onSaved }) {
     description: occasion.description ?? '',
     includes: occasion.includes ?? [],
     heroImage: occasion.heroImage ?? '',
+    priceFrom: occasion.priceFromCents ? String(occasion.priceFromCents / 100) : '',
     sortOrder: occasion.sortOrder ?? 0,
     active: occasion.active ?? true,
   });
@@ -185,6 +193,10 @@ function OccasionForm({ occasion, onClose, onSaved }) {
     setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e));
   };
 
+  // Solo dígitos: «120.000» y «$ 120 000» valen lo mismo que «120000».
+  const pesos = Number(String(form.priceFrom).replace(/\D/g, '')) || 0;
+  const automatic = cheapestPricedService(occasion.services ?? []);
+
   async function submit(event) {
     event.preventDefault();
     setSaving(true);
@@ -196,6 +208,8 @@ function OccasionForm({ occasion, onClose, onSaved }) {
       description: form.description,
       includes: form.includes,
       heroImage: form.heroImage.trim(),
+      // Vacío = automático (el servicio más barato de la ocasión).
+      priceFromCents: pesos ? pesos * 100 : null,
       sortOrder: Number(form.sortOrder) || 0,
       active: form.active,
     };
@@ -270,6 +284,23 @@ function OccasionForm({ occasion, onClose, onSaved }) {
               hint="Menor número, aparece antes."
             />
           </div>
+
+          <Input
+            label="Precio «desde» en la tarjeta (pesos)"
+            inputMode="numeric"
+            maxLength={12}
+            value={form.priceFrom}
+            onChange={set('priceFrom')}
+            error={errors.priceFromCents}
+            placeholder={automatic ? String(automatic.priceCents / 100) : 'Ej.: 120000'}
+            hint={
+              pesos
+                ? `La tarjeta dirá «Desde ${money(pesos * 100)}». Bórralo para volver al cálculo automático.`
+                : automatic
+                  ? `Vacío = automático: hoy dice «Desde ${money(automatic.priceCents, automatic.currency)}» por «${automatic.name}», el servicio más barato de esta ocasión.`
+                  : 'Vacío = automático: el precio del servicio más barato de esta ocasión.'
+            }
+          />
 
           <Input
             label="Frase corta"

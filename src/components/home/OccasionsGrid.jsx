@@ -49,7 +49,7 @@ export default function OccasionsGrid({ occasions = [], limit, showTitle = true 
 
       <ul className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
         {items.map((occasion, i) => {
-          const priceFrom = occasionPriceFrom(occasion.services);
+          const priceFrom = occasionPriceFrom(occasion.services, occasion);
           const hero = occasion.heroImage && !isHiddenPhoto(occasion.heroImage) ? occasion.heroImage : null;
 
           return (
